@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Global Language Family Mapper (GLFM)
+# GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
+#
+# Version 1.0.1
 #
 # https://codeberg.org/lahtis/GLFM
 #
@@ -29,6 +31,7 @@
 # SOFTWARE.
 #
 
+
 import json
 from pathlib import Path
 from typing import Dict, Any
@@ -40,6 +43,7 @@ from loaders.load_uralic_languages import load_uralic_languages
 from loaders.load_written_languages import load_written_languages
 from loaders.load_glottolog import load_glottolog
 from loaders.load_pos_stats import load_pos_stats
+from loaders.load_override_scripts import load_override_scripts
 
 from logic.decide_default_script import decide_default_script
 from logic.decide_default_region import decide_default_region
@@ -49,6 +53,13 @@ from logic.is_uralic import is_uralic
 from logic.set_uralic_langs import set_uralic_langs
 
 from models.language import Language
+
+# ---------------------------------------------------------
+# ETÄISYYS- JA LÄHDEMETATIEDOT (URIEL / lang2vec)
+# ---------------------------------------------------------
+DISTANCE_SOURCE = "lang2vec / URIEL"
+DISTANCE_TYPE = "genetic"
+DISTANCE_BASES = ["WALS", "SSWL", "PHOIBLE", "Ethnologue", "Glottolog"]
 
 # ---------------------------------------------------------
 # OUTPUT-kansiot
@@ -77,6 +88,7 @@ def build_unified() -> Dict[str, Any]:
     uralic_set = load_uralic_languages()
     glottolog = load_glottolog()
     pos_stats = load_pos_stats()
+    overrides = load_override_scripts()
 
     # --- Check uralic_languages.json ---
     if not uralic_set:
@@ -106,23 +118,22 @@ def build_unified() -> Dict[str, Any]:
         iso3 = iso_info.get("iso639_3", "")
         iso5 = iso_info.get("iso639_5", "")
 
-        # --- Skripti ja alue ---
-        script = decide_default_script(lang_id, w, cldr, w_written, iso_info)
+        # --- Skripti ja alue dynaamisesti lähteistä ---
+        script = decide_default_script(lang_id, w, cldr, w_written, iso_info, overrides)
         region = decide_default_region(lang_id, w, cldr, iso_info)
 
+        # --- Kirjoitetun kielen tila määräytyy YKSINOMAAN todennetusta skriptistä ---
+        is_written_flag = bool(script and script.upper() != "UNKNOWN")
+
+        # Kasataan kirjoitusskriptilista vain jos skripti on olemassa
+        scripts = [script] if is_written_flag else []
+
         # --- BCP-47 ---
-        bcp47 = build_bcp47(lang_id, script, region, iso_info)
+        bcp47 = build_bcp47(lang_id, script if is_written_flag else "", region, iso_info)
 
         # --- Fallback ja Uralic-tuki ---
         fallback = decide_fallback(lang_id, w)
         uralic = is_uralic(lang_id)
-
-        # --- Puhdista written_scripts ja lisää default_script tarvittaessa ---
-        scripts = [s for s in w_written.get("scripts", []) if s and s.upper() != "UNKNOWN"]
-        if not scripts and script:
-            scripts = [script]
-        elif not scripts:
-            scripts = []
 
         # Luo Language-olio
         lang_obj = Language(
@@ -134,20 +145,29 @@ def build_unified() -> Dict[str, Any]:
             iso639_2T=iso2T,
             iso639_3=iso3,
             iso639_5=iso5,
-            default_script=script,
+            default_script=script if is_written_flag else "",
             default_region=region,
             bcp47=bcp47,
             fallback=fallback,
             uralicNLP=uralic,
-            written=w_written.get("written", False),
+            written=is_written_flag,
             written_scripts=scripts,
-            glottocode=w_written.get("glottocode"),
-            family=w_written.get("family"),
+            glottocode=w_written.get("glottocode", "") if w_written else "",
+            family=w_written.get("family", "") if w_written else "",
             glottolog=glotto,
             pos_stats=pos,
         )
 
-        unified[lang_id] = lang_obj.__dict__
+        lang_dict = lang_obj.__dict__
+
+        # --- Lisätään etäisyysmetatiedot vain todellisuudessa kirjoitetuille kielille ---
+        if is_written_flag:
+            lang_dict["distance_source"] = DISTANCE_SOURCE
+            lang_dict["distance_type"] = DISTANCE_TYPE
+            lang_dict["distance_bases"] = DISTANCE_BASES
+            lang_dict["nearest_languages"] = []
+
+        unified[lang_id] = lang_dict
 
     return unified
 
@@ -165,4 +185,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

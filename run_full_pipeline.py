@@ -3,6 +3,7 @@
 #
 # Global Language Family Mapper (GLFM)
 # Copyright (c) 2026 Tuomas Lähteenmäki
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 #
@@ -39,6 +40,7 @@ TOOLS = PROJECT_ROOT / "tools"
 # Pipeline steps
 GENERATE_ISO_FILES = TOOLS / "generate_iso_files.py"
 BUILD_UNIFIED = PROJECT_ROOT / "build_unified.py"
+COMPUTE_NEAREST = TOOLS / "compute_nearest_languages.py"
 VALIDATE_BCP47 = TOOLS / "validate_bcp47.py"
 VALIDATE_FALLBACKS = TOOLS / "validate_fallbacks.py"
 VALIDATE_ISO = TOOLS / "validate_iso_consistency.py"
@@ -80,6 +82,7 @@ def main():
     steps = [
         ("Generate ISO files", GENERATE_ISO_FILES),
         ("Build unified database", BUILD_UNIFIED),
+        ("Compute nearest languages (lang2vec)", COMPUTE_NEAREST),
         ("Validate BCP-47 tags", VALIDATE_BCP47),
         ("Validate fallback chains", VALIDATE_FALLBACKS),
         ("Validate ISO consistency", VALIDATE_ISO),
@@ -109,4 +112,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

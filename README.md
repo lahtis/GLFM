@@ -4,7 +4,7 @@ A modular, JSON-based language database and validation pipeline for over **7,900
 
 **Author:** Tuomas Lähteenmäki  
 **License:** MIT  
-**Version:** 1.0.0
+**Version:** 1.0.1
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -16,6 +16,7 @@ A modular, JSON-based language database and validation pipeline for over **7,900
 ## Features
 
 - **7,900+ Languages**: Unified from ISO 639-1/2/3/5, Wiktionary, CLDR, Glottolog, and POS statistics.  
+- **Nearest Language Neighbors**: Each written language includes typologically nearest languages based on URIEL/lang2vec features (syntax, phonology, inventory, family).
 - **Accurate BCP-47 tags**: Language, script, and region combined automatically.  
 - **Fallback Chains**: Automatically assigns fallback languages where applicable.  
 - **Uralic/Finno-Ugric Support**: Detailed mapping for Finnish, Karelian, Estonian, and related languages.  
@@ -27,26 +28,30 @@ A modular, JSON-based language database and validation pipeline for over **7,900
 ## Directory Structure
 
 ```json
-├── build_unified.py               # Build unified JSON database
-├── data/                          # Raw and processed language data
+├── build_unified.py # Build unified JSON database
+├── data/ # Raw and processed language data
 │ ├── cldr/
 │ │ └── likelySubtags.json
-│ ├── iso_639_*.py                 # ISO datasets in Python format
+│ ├── iso_639_*.py # ISO datasets in Python format
+│ ├── override_scripts.json
 │ ├── uralic_languages.json
 │ └── ...
-├── loaders/                       # Data loading modules
-├── logic/                         # Logic for scripts, regions, fallbacks, BCP-47
-├── models/                        # Data models (Language class, ISO modules)
-├── output/                        # Pipeline output
-│ ├── unified/                     # unified_languages.json
-│ ├── validation/                  # validation reports, errors, fallback graph
+├── loaders/ # Data loading modules
+├── logic/ # Logic for scripts, regions, fallbacks, BCP-47
+├── models/ # Data models (Language class, ISO modules)
+├── output/ # Pipeline output
+│ ├── unified/ # unified_languages.json
+│ ├── validation/ # validation reports, errors, fallback graph
 │ ├── final/
 │ ├── dialects/
 │ └── logs/
-├── tools/                         # Validation, report generation, and helpers
-├── run_full_pipeline.py           # Run full pipeline: build → validate → report
+├── tools/ # Validation, report generation, and helpers
+│ ├── compute_nearest_languages.py # Compute nearest language neighbors
+│ └── ...
+├── run_full_pipeline.py # Run full pipeline: build → validate → report
 └── init.py
 ```
+
 
 ---
 
@@ -74,46 +79,56 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
   "glottocode": "finn1255",
   "family": "Uralic",
   "glottolog": {...},
-  "pos_stats": {...}
+  "pos_stats": {...},
+  "nearest_languages": [
+    {"lang": "est", "distance": 0.15},
+    {"lang": "krl", "distance": 0.22},
+    {"lang": "vep", "distance": 0.28}
+  ],
+  "distance_source": "lang2vec / URIEL",
+  "distance_type": "fam",
+  "distance_bases": ["WALS", "SSWL", "PHOIBLE", "Ethnologue", "Glottolog"]
 }
 ```
 
-- ```bcp47``` is automatically generated: ```lang[-Script][-Region]```.
-- ```fallback``` is the default fallback language.
-- ```uralicNLP``` is true if the language belongs to the Uralic/Finno-Ugric family.
-- ```written_scripts``` lists all known writing scripts.
+- `bcp47` is automatically generated: `lang[-Script][-Region]`.
+- `fallback` is the default fallback language.
+- `uralicNLP` is true if the language belongs to the Uralic/Finno-Ugric family.
+- `written_scripts` lists all known writing scripts.
+- `nearest_languages` ranks typologically nearest written languages by distance (0.0 = identical features, 1.0 = completely different).
 
 ---
 
 ## Pipeline Overview
 
-- The pipeline is fully automated:
-- Generate ISO files (tools/generate_iso_files.py)
-- Build Unified Database (build_unified.py)
+The pipeline is fully automated:
 
----
-
-## Validate:
-
-- BCP-47 tags (validate_bcp47.py)
-- Fallback chains (validate_fallbacks.py)
-- ISO consistency (validate_iso_consistency.py)
-- POS statistics (validate_pos_stats.py)
-- Glottolog data (validate_glottolog.py)
-- Generate Validation Reports (generate_report.py):
-- Markdown report (validation_report.md)
-- HTML report (validation_report.html)
-- JSON error log (validation_errors.json)
-- Visualize Fallback Graph (visualize_fallbacks.py)
+1. **Generate ISO files** (`tools/generate_iso_files.py`)
+2. **Build Unified Database** (`build_unified.py`)
+3. **Compute Nearest Languages** (`tools/compute_nearest_languages.py`) – adds `nearest_languages` field to all written languages
+4. **Validate**:
+   - BCP-47 tags (`validate_bcp47.py`)
+   - Fallback chains (`validate_fallbacks.py`)
+   - ISO consistency (`validate_iso_consistency.py`)
+   - POS statistics (`validate_pos_stats.py`)
+   - Glottolog data (`validate_glottolog.py`)
+5. **Generate Validation Reports** (`generate_report.py`):
+   - Markdown report (`validation_report.md`)
+   - HTML report (`validation_report.html`)
+   - JSON error log (`validation_errors.json`)
+6. **Visualize Fallback Graph** (`visualize_fallbacks.py`)
 
 ---
 
 ## Usage
 
-Run the full pipeline:
-```python
+### Run the full pipeline
+
+```bash
 python3 run_full_pipeline.py
 ```
+
+### Access data in Python
 
 ```python
 import json
@@ -127,14 +142,27 @@ with unified_file.open("r", encoding="utf-8") as f:
 finnish = languages.get("fin")
 print(finnish["bcp47"])  # fi-Latn-FI
 print(finnish["uralicNLP"])  # True
+print(finnish["nearest_languages"][:5])  # Top 5 nearest languages
+```
+
+### Find nearest languages
+
+```python
+# Get 10 nearest languages to Finnish
+finnish = languages.get("fin", {})
+for neighbor in finnish.get("nearest_languages", [])[:10]:
+    print(f"{neighbor['lang']}: {neighbor['distance']:.4f}")
 ```
 
 ---
 
 ## Notes
-- uralic_languages.json must be present for Uralic support; pipeline will warn if missing.
+
+- `uralic_languages.json` must be present for Uralic support; pipeline will warn if missing.
 - The unified database integrates ISO, Wiktionary, CLDR, Glottolog, and POS stats.
 - Fallback chains ensure robust language detection for RSS feeds.
+- `nearest_languages` is computed using URIEL/lang2vec typological features (family, syntax, phonology, inventory).
+- Distance scores range from 0.0 (identical features) to 1.0 (completely different).
 
 ---
 

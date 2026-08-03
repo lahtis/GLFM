@@ -120,9 +120,33 @@ The pipeline is fully automated:
 
 ---
 
+## Global Language Family Mapper (GLFM)
+* Python 3.8+
+
+## Core dependencies
+* numpy>=1.26.0,<2.0.0
+* setuptools>=69.0.0
+
+## Language data
+* lang2vec>=1.1.0
+
+## Data processing
+* requests>=2.28.0
+
+## Visualization (optional)
+* graphviz>=0.20.0
+
+## Testing (optional)
+* pytest>=7.0.0
+
 ## Usage
 
 ### Run the full pipeline
+
+## Install 
+```bash
+pip install -r requirements.txt
+```
 
 ```bash
 python3 run_full_pipeline.py

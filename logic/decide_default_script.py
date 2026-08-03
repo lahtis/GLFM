@@ -29,36 +29,42 @@
 # SOFTWARE.
 #
 
-def decide_default_script(lang_id, wikt, cldr, written, iso_info):
-    """
-    Päätetään oletusskripti:
-    1. written-languages → ensimmäinen tunnettu script
-    2. CLDR likelySubtags → script
-    3. Wiktionary → ensimmäinen tunnettu script
-    4. fallback: 'Latn'
-    """
 
-    # 1. Written-languages
+def decide_default_script(lang_id, wikt, cldr, written, iso_info, overrides=None):
+    """
+    Päätetään kielen oletuskirjoitusjärjestelmä hierarkkisesti:
+    1. Ohitustiedosto (data/override_scripts.json) - paikkaa CLDR:n aukot
+    2. Written-languages -lähde
+    3. CLDR likelySubtags
+    4. Wiktionary
+    5. Ei löytynyt -> ""
+    """
+    overrides = overrides or {}
+
+    # 1. Tarkistetaan täydentävä datalähde (overrides)
+    if lang_id in overrides and overrides[lang_id]:
+        return overrides[lang_id][0]
+
+    # 2. Written-languages
     if written and written.get("scripts"):
         for s in written["scripts"]:
             if s and s.upper() != "UNKNOWN":
                 return s
 
-    # 2. CLDR
-    cldr_key = iso_info.get("iso639_1", lang_id)
-    if cldr_key in cldr:
-        tag = cldr[cldr_key]
-        if isinstance(tag, str):
-            parts = tag.split("-")  # huom! CLDR käyttää '-'
-            if len(parts) >= 2:
-                return parts[1]
+    # 3. CLDR likelySubtags
+    cldr_keys = [iso_info.get("iso639_1"), iso_info.get("iso639_3"), lang_id]
+    for key in cldr_keys:
+        if key and key in cldr:
+            tag = cldr[key]
+            if isinstance(tag, str):
+                parts = tag.split("-")
+                if len(parts) >= 2 and parts[1].upper() != "UNKNOWN":
+                    return parts[1]
 
-    # 3. Wiktionary
+    # 4. Wiktionary
     if wikt and wikt.get("scripts"):
         for s in wikt["scripts"]:
             if s and s.upper() != "UNKNOWN":
                 return s
 
-    # 4. fallback
-    return "Latn"
-
+    return ""

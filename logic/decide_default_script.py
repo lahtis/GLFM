@@ -29,10 +29,15 @@
 # SOFTWARE.
 #
 
+import re
+
+# ISO 15924 Script -koodit ovat aina täsmälleen 4 kirjainta (esim. Latn, Cyrl, Arab)
+SCRIPT_PATTERN = re.compile(r"^[A-Z][a-z]{3}$")
+
 
 def decide_default_script(lang_id, wikt, cldr, written, iso_info, overrides=None):
-    """
-    Päätetään kielen oletuskirjoitusjärjestelmä hierarkkisesti:
+    """Päätetään kielen oletuskirjoitusjärjestelmä hierarkkisesti:
+
     1. Ohitustiedosto (data/override_scripts.json) - paikkaa CLDR:n aukot
     2. Written-languages -lähde
     3. CLDR likelySubtags
@@ -43,12 +48,14 @@ def decide_default_script(lang_id, wikt, cldr, written, iso_info, overrides=None
 
     # 1. Tarkistetaan täydentävä datalähde (overrides)
     if lang_id in overrides and overrides[lang_id]:
-        return overrides[lang_id][0]
+        script = overrides[lang_id][0]
+        if SCRIPT_PATTERN.match(script):
+            return script
 
     # 2. Written-languages
     if written and written.get("scripts"):
         for s in written["scripts"]:
-            if s and s.upper() != "UNKNOWN":
+            if s and s.upper() != "UNKNOWN" and SCRIPT_PATTERN.match(s):
                 return s
 
     # 3. CLDR likelySubtags
@@ -58,13 +65,15 @@ def decide_default_script(lang_id, wikt, cldr, written, iso_info, overrides=None
             tag = cldr[key]
             if isinstance(tag, str):
                 parts = tag.split("-")
-                if len(parts) >= 2 and parts[1].upper() != "UNKNOWN":
-                    return parts[1]
+                # Etsitään BCP-47 osista se, joka vastaa ISO 15924 4-kirjaimista muotoa
+                for part in parts[1:]:
+                    if SCRIPT_PATTERN.match(part) and part.upper() != "ZXXX":
+                        return part.capitalize()
 
     # 4. Wiktionary
     if wikt and wikt.get("scripts"):
         for s in wikt["scripts"]:
-            if s and s.upper() != "UNKNOWN":
+            if s and s.upper() != "UNKNOWN" and SCRIPT_PATTERN.match(s):
                 return s
 
     return ""

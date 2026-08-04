@@ -12,8 +12,8 @@ Attaches a `nearest_languages` field to written languages in
 GLFM's unified_languages.json, ranking other written languages by
 lang2vec / URIEL genetic distance.
 
-Adds a lightweight checkpoint so long runs can resume automatically.
-Optimized with low-memory matrix dot products and safe batching.
+Optimized with low-memory matrix dot products, vector indexing,
+and lightweight I/O checkpoints.
 """
 
 from __future__ import annotations
@@ -36,12 +36,12 @@ log = logging.getLogger("compute_nearest_languages")
 DEFAULT_FILE = Path("output/unified/unified_languages.json")
 BACKUP_DIR = Path("output/unified/backups")
 CHECKPOINT_PATH = Path("output/unified/nearest_languages.checkpoint.json")
-CHECKPOINT_INTERVAL = 50
+CHECKPOINT_INTERVAL = 1000  # Nostettu 50 -> 1000 levypullonkaulan poistamiseksi
 
 DISTANCE_TYPE = "fam"
 DISTANCE_SOURCE = "lang2vec / URIEL"
 DISTANCE_BASES = ["WALS", "SSWL", "PHOIBLE", "Ethnologue", "Glottolog"]
-GLFM_VERSION = "1.0.2"
+GLFM_VERSION = "1.0.3"
 
 
 def load_json(path: Path) -> dict:
@@ -131,30 +131,25 @@ def compute_distance_matrix(codes: List[str]) -> tuple[np.ndarray, set[str]]:
     if not valid_list:
         return np.full((n, n), np.nan), valid_set
 
-    # Stack feature vectors into 2D array (shape: N_valid x Feature_dim)
+    # Stack feature vectors into 2D array
     matrix_valid = np.array([features_dict[c] for c in valid_list], dtype=float)
     num_features = matrix_valid.shape[1]
 
-    log.info("Computing pairwise distances via matrix dot product (low memory)...")
+    log.info("Computing pairwise distances via matrix dot product...")
 
-    # Hamming distance formula for binary vectors using matrix multiplication:
-    # diff_count = sum_1(A) + sum_1(B) - 2 * (A @ B.T)
+    # Hamming distance formula via dot product
     sum_ones = matrix_valid.sum(axis=1, keepdims=True)
     intersection = matrix_valid @ matrix_valid.T
     diff_count = sum_ones + sum_ones.T - 2 * intersection
 
-    # Normalize by total number of features
     dist_matrix_valid = diff_count / num_features if num_features > 0 else np.zeros_like(diff_count)
 
-    # Map back to full N x N matrix containing NaN for missing/unsupported codes
+    # Map back to full N x N matrix using vector indexing (vektorisoitu sijoitus)
     full_matrix = np.full((n, n), np.nan)
     code_to_idx = {c: i for i, c in enumerate(codes)}
+    valid_indices = [code_to_idx[c] for c in valid_list]
 
-    for i, c1 in enumerate(valid_list):
-        idx1 = code_to_idx[c1]
-        for j, c2 in enumerate(valid_list):
-            idx2 = code_to_idx[c2]
-            full_matrix[idx1, idx2] = dist_matrix_valid[i, j]
+    full_matrix[np.ix_(valid_indices, valid_indices)] = dist_matrix_valid
 
     return full_matrix, valid_set
 
@@ -175,8 +170,6 @@ class CheckpointManager:
                 return None
             if data.get("glfm_version") != GLFM_VERSION:
                 return None
-            if data.get("distance_source") != DISTANCE_SOURCE:
-                return None
             return data
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
             return None
@@ -192,8 +185,9 @@ class CheckpointManager:
             "results": results,
         }
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        # Ei käytetä indentöintiä checkpoint-tiedostossa kirjoitusnopeuden maksimoimiseksi
         with tmp.open("w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
+            json.dump(data, f, ensure_ascii=False)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, self.path)
@@ -212,11 +206,7 @@ def build_nearest_map(data: dict) -> Dict[str, list]:
         log.warning("No written languages with valid ISO 639-3 codes found!")
         return {}
 
-    log.info(
-        "Computing '%s' distances for %d written languages...",
-        DISTANCE_TYPE,
-        len(lang_ids),
-    )
+    log.info("Computing '%s' distances for %d written languages...", DISTANCE_TYPE, len(lang_ids))
 
     try:
         matrix, valid_codes_set = compute_distance_matrix(codes)
@@ -244,44 +234,44 @@ def build_nearest_map(data: dict) -> Dict[str, list]:
         log.info("No checkpoint found. Starting fresh.")
 
     processed = len(completed_set)
-    failed = 0
 
     for i, lang_id in enumerate(lang_ids):
         if lang_id in completed_set:
             continue
 
-        try:
-            row = matrix[i]
-            distances = []
-            for j, other_id in enumerate(lang_ids):
-                if i == j:
-                    continue
-                d = row[j]
-                if np.isnan(d):
-                    continue
-                distances.append({"lang": other_id, "distance": round(float(d), 4)})
+        row = matrix[i]
+        # Suodatetaan pois NaN:it ja itseensä kohdistuva etäisyys
+        valid_mask = ~np.isnan(row)
+        valid_mask[i] = False
 
-            distances.sort(key=lambda x: x["distance"])
-            results[lang_id] = distances
+        if not np.any(valid_mask):
+            results[lang_id] = []
             completed_set.add(lang_id)
             completed_list.append(lang_id)
             processed += 1
-
-            if processed % CHECKPOINT_INTERVAL == 0 or processed == len(lang_ids):
-                log.info("[%d/%d] %s (%.1f%%)", processed, len(lang_ids), lang_id, (processed / len(lang_ids)) * 100)
-                checkpoint.save(DISTANCE_TYPE, completed_list, results)
-
-        except Exception as e:
-            failed += 1
-            log.warning("Could not compute nearest languages for %s: %s", lang_id, e)
             continue
 
-    checkpoint.save(DISTANCE_TYPE, completed_list, results)
+        valid_indices = np.where(valid_mask)[0]
+        valid_distances = row[valid_indices]
 
-    if failed:
-        log.warning("Completed with failures. Processed: %d Failed: %d", processed, failed)
-    else:
-        log.info("Completed. Processed: %d Failed: %d", processed, failed)
+        # Luodaan lista
+        distances = [
+            {"lang": lang_ids[j], "distance": round(float(dist), 4)}
+            for j, dist in zip(valid_indices, valid_distances)
+        ]
+        distances.sort(key=lambda x: x["distance"])
+
+        results[lang_id] = distances
+        completed_set.add(lang_id)
+        completed_list.append(lang_id)
+        processed += 1
+
+        if processed % CHECKPOINT_INTERVAL == 0 or processed == len(lang_ids):
+            log.info("[%d/%d] %s (%.1f%%)", processed, len(lang_ids), lang_id, (processed / len(lang_ids)) * 100)
+            checkpoint.save(DISTANCE_TYPE, completed_list, results)
+
+    checkpoint.save(DISTANCE_TYPE, completed_list, results)
+    log.info("Completed processing nearest languages for %d languages.", processed)
 
     return results
 

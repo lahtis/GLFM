@@ -13,6 +13,7 @@ GLFM's unified_languages.json, ranking other written languages by
 lang2vec / URIEL genetic distance.
 
 Adds a lightweight checkpoint so long runs can resume automatically.
+Optimized with low-memory matrix dot products and safe batching.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ log = logging.getLogger("compute_nearest_languages")
 DEFAULT_FILE = Path("output/unified/unified_languages.json")
 BACKUP_DIR = Path("output/unified/backups")
 CHECKPOINT_PATH = Path("output/unified/nearest_languages.checkpoint.json")
-CHECKPOINT_INTERVAL = 5
+CHECKPOINT_INTERVAL = 50
 
 DISTANCE_TYPE = "fam"
 DISTANCE_SOURCE = "lang2vec / URIEL"
@@ -95,35 +96,67 @@ def collect_written_codes(data: dict) -> Dict[str, str]:
     return langs
 
 
-def compute_distance_matrix(codes: List[str]):
+def compute_distance_matrix(codes: List[str]) -> tuple[np.ndarray, set[str]]:
+    """Computes a pairwise Hamming distance matrix using fast matrix dot products (RAM efficient)."""
     n = len(codes)
-    matrix = np.zeros((n, n))
-    log.info("Fetching '%s' features for %d languages...", DISTANCE_TYPE, n)
 
-    features = {}
-    for code in codes:
+    # 1. Check supported codes
+    try:
+        available = set(l2v.available_languages())
+        valid_codes = [c for c in codes if c in available]
+        log.info(
+            "Found %d / %d languages in URIEL database. Fetching '%s' features in batch...",
+            len(valid_codes), n, DISTANCE_TYPE
+        )
+    except Exception as e:
+        log.warning("Could not check available languages from lang2vec: %s", e)
+        valid_codes = codes
+
+    # 2. Fetch features in batch
+    features_dict = {}
+    if valid_codes:
         try:
-            feat_dict = l2v.get_features([code], DISTANCE_TYPE)
-            features[code] = feat_dict.get(code, None)
+            features_dict = l2v.get_features(valid_codes, DISTANCE_TYPE)
         except Exception as e:
-            log.warning("Could not get features for %s: %s", code, e)
-            features[code] = None
+            log.error("Failed to fetch lang2vec features in batch: %s", e)
 
-    log.info("Computing pairwise distances...")
-    for i, code1 in enumerate(codes):
-        for j, code2 in enumerate(codes):
-            if i == j:
-                matrix[i][j] = 0.0
-                continue
-            f1 = features.get(code1)
-            f2 = features.get(code2)
-            if f1 is None or f2 is None or len(f1) != len(f2):
-                matrix[i][j] = float('nan')
-                continue
-            diff = sum(1 for a, b in zip(f1, f2) if a != b)
-            matrix[i][j] = diff / len(f1) if len(f1) > 0 else 0.0
+    if not features_dict:
+        raise RuntimeError("lang2vec returned no features.")
 
-    return matrix
+    # 3. Build NumPy matrix for valid languages only
+    valid_list = [c for c in codes if c in features_dict and features_dict[c] is not None]
+    valid_set = set(valid_list)
+    log.info("Feature vectors available for %d/%d languages.", len(valid_list), n)
+
+    if not valid_list:
+        return np.full((n, n), np.nan), valid_set
+
+    # Stack feature vectors into 2D array (shape: N_valid x Feature_dim)
+    matrix_valid = np.array([features_dict[c] for c in valid_list], dtype=float)
+    num_features = matrix_valid.shape[1]
+
+    log.info("Computing pairwise distances via matrix dot product (low memory)...")
+
+    # Hamming distance formula for binary vectors using matrix multiplication:
+    # diff_count = sum_1(A) + sum_1(B) - 2 * (A @ B.T)
+    sum_ones = matrix_valid.sum(axis=1, keepdims=True)
+    intersection = matrix_valid @ matrix_valid.T
+    diff_count = sum_ones + sum_ones.T - 2 * intersection
+
+    # Normalize by total number of features
+    dist_matrix_valid = diff_count / num_features if num_features > 0 else np.zeros_like(diff_count)
+
+    # Map back to full N x N matrix containing NaN for missing/unsupported codes
+    full_matrix = np.full((n, n), np.nan)
+    code_to_idx = {c: i for i, c in enumerate(codes)}
+
+    for i, c1 in enumerate(valid_list):
+        idx1 = code_to_idx[c1]
+        for j, c2 in enumerate(valid_list):
+            idx2 = code_to_idx[c2]
+            full_matrix[idx1, idx2] = dist_matrix_valid[i, j]
+
+    return full_matrix, valid_set
 
 
 class CheckpointManager:
@@ -180,17 +213,13 @@ def build_nearest_map(data: dict) -> Dict[str, list]:
         return {}
 
     log.info(
-        "Computing '%s' distances for %d written languages. "
-        "Building the distance matrix may take a long time...",
+        "Computing '%s' distances for %d written languages...",
         DISTANCE_TYPE,
         len(lang_ids),
     )
 
-    # NOTE:
-    # The full distance matrix is always recomputed.
-    # The checkpoint only resumes nearest-language generation.
     try:
-        matrix = compute_distance_matrix(codes)
+        matrix, valid_codes_set = compute_distance_matrix(codes)
     except Exception:
         log.exception("Batched lang2vec distance call failed for %d languages.", len(lang_ids))
         raise
@@ -228,18 +257,18 @@ def build_nearest_map(data: dict) -> Dict[str, list]:
                 if i == j:
                     continue
                 d = row[j]
-                if d is None or d != d:
+                if np.isnan(d):
                     continue
                 distances.append({"lang": other_id, "distance": round(float(d), 4)})
+
             distances.sort(key=lambda x: x["distance"])
             results[lang_id] = distances
             completed_set.add(lang_id)
             completed_list.append(lang_id)
             processed += 1
 
-            log.info("[%d/%d] %s (%.1f%%)", processed, len(lang_ids), lang_id, (processed / len(lang_ids)) * 100)
-
-            if processed % CHECKPOINT_INTERVAL == 0:
+            if processed % CHECKPOINT_INTERVAL == 0 or processed == len(lang_ids):
+                log.info("[%d/%d] %s (%.1f%%)", processed, len(lang_ids), lang_id, (processed / len(lang_ids)) * 100)
                 checkpoint.save(DISTANCE_TYPE, completed_list, results)
 
         except Exception as e:

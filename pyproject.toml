@@ -1,0 +1,17 @@
+[project]
+name = "glfm"
+version = "1.0.2"
+description = "A comprehensive JSON database mapping over 7,700 languages (ISO 639-3) to language families (ISO 639-5) for RSS tools and localization workflows."
+readme = "README.md"
+authors = [
+    { name = "Tuomas Lähteenmäki" }
+]
+license = { text = "MIT" }
+keywords = ["python", "linux", "localization", "iso639-3", "bcp47", "language-mapping", "nlp"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Software Development :: Internationalization",
+    "License :: OSI Approved :: MIT License",
+]

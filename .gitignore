@@ -1,5 +1,31 @@
+# Virtual Environment
 .venv/
+venv/
+ENV/
+
+# Python cache & build files
 __pycache__/
-# GLFM checkpoints
+*.py[cod]
+*$py.class
+*.so
+.python-version
+
+# GLFM Output Directories
+output/dialects/
+output/final/
+output/logs/
+
+# GLFM Checkpoints & Temp files
 *.checkpoint.json
 *.checkpoint.json.tmp
+*.tmp
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db

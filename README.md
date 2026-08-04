@@ -4,7 +4,7 @@ A modular, JSON-based language database and validation pipeline for over **7,900
 
 **Author:** Tuomas Lähteenmäki  
 **License:** MIT  
-**Version:** 1.0.1
+**Version:** 1.0.2
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -22,36 +22,36 @@ A modular, JSON-based language database and validation pipeline for over **7,900
 - **Uralic/Finno-Ugric Support**: Detailed mapping for Finnish, Karelian, Estonian, and related languages.  
 - **Validation Pipeline**: Full automated checks for ISO consistency, BCP-47 compliance, fallback correctness, POS stats, and Glottolog data.  
 - **Graphviz Visualization**: Fallback relationships can be visualized.  
+- **Checkpoint/Resume Support**: Long-running nearest-language computations can be resumed from checkpoint.
 
 ---
 
 ## Directory Structure
 
-```json
-├── build_unified.py # Build unified JSON database
-├── data/ # Raw and processed language data
-│ ├── cldr/
-│ │ └── likelySubtags.json
-│ ├── iso_639_*.py # ISO datasets in Python format
-│ ├── override_scripts.json
-│ ├── uralic_languages.json
-│ └── ...
-├── loaders/ # Data loading modules
-├── logic/ # Logic for scripts, regions, fallbacks, BCP-47
-├── models/ # Data models (Language class, ISO modules)
-├── output/ # Pipeline output
-│ ├── unified/ # unified_languages.json
-│ ├── validation/ # validation reports, errors, fallback graph
-│ ├── final/
-│ ├── dialects/
-│ └── logs/
-├── tools/ # Validation, report generation, and helpers
-│ ├── compute_nearest_languages.py # Compute nearest language neighbors
-│ └── ...
-├── run_full_pipeline.py # Run full pipeline: build → validate → report
+```text
+├── build_unified.py                # Build unified JSON database
+├── data/                           # Raw and processed language data
+│   ├── cldr/
+│   │   └── likelySubtags.json
+│   ├── iso_639_*.py                # ISO datasets in Python format
+│   ├── override_scripts.json
+│   ├── uralic_languages.json
+│   └── ...
+├── loaders/                        # Data loading modules
+├── logic/                          # Logic for scripts, regions, fallbacks, BCP-47
+├── models/                         # Data models (Language class, ISO modules)
+├── output/                         # Pipeline output
+│   ├── unified/                    # unified_languages.json
+│   ├── validation/                 # validation reports, errors, fallback graph
+│   ├── final/
+│   ├── dialects/
+│   └── logs/
+├── tools/                          # Validation, report generation, and helpers
+│   ├── compute_nearest_languages.py  # Compute nearest language neighbors
+│   └── ...
+├── run_full_pipeline.py            # Run full pipeline: build → validate → report
 └── init.py
 ```
-
 
 ---
 
@@ -105,7 +105,7 @@ The pipeline is fully automated:
 
 1. **Generate ISO files** (`tools/generate_iso_files.py`)
 2. **Build Unified Database** (`build_unified.py`)
-3. **Compute Nearest Languages** (`tools/compute_nearest_languages.py`) – adds `nearest_languages` field to all written languages
+3. **Compute Nearest Languages** (`tools/compute_nearest_languages.py`) – adds `nearest_languages` field to all written languages (supports checkpoint/resume for long runs)
 4. **Validate**:
    - BCP-47 tags (`validate_bcp47.py`)
    - Fallback chains (`validate_fallbacks.py`)
@@ -120,35 +120,47 @@ The pipeline is fully automated:
 
 ---
 
+## Requirements
+
 ### Global Language Family Mapper (GLFM)
-* Python 3.8+
+- Python 3.8+
 
 ### Core dependencies
-* numpy>=1.26.0,<2.0.0
-* setuptools>=69.0.0
+- numpy>=1.26.0,<2.0.0
+- setuptools>=69.0.0
 
 ### Language data
-* lang2vec>=1.1.0
+- lang2vec>=1.1.0
 
 ### Data processing
-* requests>=2.28.0
+- requests>=2.28.0
 
 ### Visualization (optional)
-* graphviz>=0.20.0
+- graphviz>=0.20.0
 
 ### Testing (optional)
-* pytest>=7.0.0
+- pytest>=7.0.0
 
-# Usage
-## Run the full pipeline
+---
+
+## Usage
+
+### Run the full pipeline
 
 ```bash
 pip install -r requirements.txt
-```
-
-```bash
 python3 run_full_pipeline.py
 ```
+
+### Run nearest-language step with checkpoint
+
+```bash
+python3 tools/compute_nearest_languages.py --checkpoint
+```
+
+Checkpoint tallentaa etenemisen `output/unified/nearest_languages.checkpoint.json` ja mahdollistaa resumed-ajon keskeytyksen jälkeen.
+
+---
 
 ### Access data in Python
 

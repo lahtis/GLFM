@@ -1,12 +1,17 @@
+[build-system]
+requires = ["setuptools>=69.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "glfm"
 version = "1.0.2"
 description = "A comprehensive JSON database mapping over 7,700 languages (ISO 639-3) to language families (ISO 639-5) for RSS tools and localization workflows."
 readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
 authors = [
     { name = "Tuomas Lähteenmäki" }
 ]
-license = { text = "MIT" }
 keywords = ["python", "linux", "localization", "iso639-3", "bcp47", "language-mapping", "nlp"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -15,3 +20,14 @@ classifiers = [
     "Topic :: Software Development :: Internationalization",
     "License :: OSI Approved :: MIT License",
 ]
+
+dependencies = [
+    "numpy>=1.26.0,<2.0.0",
+    "setuptools>=69.0.0",
+    "lang2vec>=1.1.0",
+    "requests>=2.28.0",
+]
+
+[project.urls]
+Homepage = "https://codeberg.org/lahtis/GLFM"
+Repository = "https://codeberg.org/lahtis/GLFM"

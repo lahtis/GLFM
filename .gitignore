@@ -19,6 +19,7 @@ output/logs/
 *.checkpoint.json
 *.checkpoint.json.tmp
 *.tmp
+output/unified/unified_languages.json
 
 # IDE / Editor specific
 .vscode/

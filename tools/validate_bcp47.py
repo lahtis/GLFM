@@ -36,8 +36,14 @@ import re
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 UNIFIED = PROJECT_ROOT / "output" / "unified" / "unified_languages.json"
 
-# Korjattu pattern: Script pakollinen, region valinnainen
-BCP47_PATTERN = re.compile(r"^[a-z]{2,3}-[A-Z][a-z]{3}(-([A-Z]{2}|\d{3}))?$")
+# Korjattu BCP-47 pattern:
+# - Kieli: 2-3 kirjainta (pakollinen)
+# - Script: -Latn, -Cyrl jne. (valinnainen)
+# - Region: -FI, -GH, -001 jne. (valinnainen)
+BCP47_PATTERN = re.compile(
+    r"^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|\d{3}))?$",
+    re.IGNORECASE
+)
 
 def validate_bcp47():
     with open(UNIFIED, "r", encoding="utf-8") as f:
@@ -63,4 +69,3 @@ def validate_bcp47():
 
 if __name__ == "__main__":
     validate_bcp47()
-

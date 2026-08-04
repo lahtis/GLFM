@@ -31,27 +31,32 @@
 
 import json
 from pathlib import Path
+from typing import Any, Dict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA = PROJECT_ROOT / "data" / "glottolog.json"
 
-def load_glottolog():
+
+def load_glottolog() -> Dict[str, Dict[str, Any]]:
+    """Lataa Glottolog-metadatan ja palauttaa sen jäsenneltynä sanakirjana."""
     if not DATA.exists():
         return {}
 
-    with open(DATA, "r", encoding="utf-8") as f:
+    with DATA.open("r", encoding="utf-8") as f:
         raw = json.load(f)
 
     glotto = {}
 
     for code, info in raw.items():
+        if not isinstance(info, dict):
+            continue
+
         glotto[code] = {
-            "macroarea": info.get("macroarea"),
-            "latitude": info.get("latitude"),
+            "macroarea": info.get("macroarea") or "",
+            "latitude": info.get("latitude"),  # Voit jättää float/None-arvoksi
             "longitude": info.get("longitude"),
-            "lineage": info.get("lineage", []),
-            "family": info.get("family"),
+            "lineage": info.get("lineage") if isinstance(info.get("lineage"), list) else [],
+            "family": info.get("family") or "",
         }
 
     return glotto
-

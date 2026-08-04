@@ -54,9 +54,19 @@ def run(title: str, script: Path) -> bool:
     print(f"\n=== {title} ===")
     print(f"Running: {script}\n")
 
-    # Inherit stdout and stderr to display logs directly in real time
     process = subprocess.Popen([sys.executable, str(script)])
-    process.wait()
+
+    try:
+        process.wait()
+    except KeyboardInterrupt:
+        print("\n\n[CANCELLED] Pipeline execution interrupted by user.")
+        print("Terminating running subprocess...")
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        sys.exit(130)
 
     if process.returncode != 0:
         print(f"\n[FAILED] {title} (Exit code: {process.returncode})")

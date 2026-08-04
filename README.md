@@ -138,7 +138,7 @@ The pipeline is fully automated:
 ### Run the full pipeline
 
 ```bash
-clone https://codeberg.org/lahtis/GLFM.git
+git clone https://codeberg.org/lahtis/GLFM.git
 pip install -r requirements.txt
 
 python3 run_full_pipeline.py

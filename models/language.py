@@ -29,14 +29,14 @@
 # SOFTWARE.
 #
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List
 
 
 @dataclass
 class Language:
-    """
-    Unified language model used by the pipeline.
+    """Unified language model used by the pipeline.
+
     Kaikki kentät ovat datavetoisia ja tulevat ISO/Wiktionary/CLDR/
     Written/Glottolog/POS-lähteistä.
     """
@@ -53,7 +53,7 @@ class Language:
     iso639_3: str = ""
     iso639_5: str = ""
 
-    # Oletus skripti ja alue
+    # Oletusskripti ja -alue
     default_script: str = ""
     default_region: str = ""
 
@@ -69,8 +69,8 @@ class Language:
     # Written-languages metadata
     written: bool = False
     written_scripts: List[str] = field(default_factory=list)
-    glottocode: Optional[str] = None
-    family: Optional[str] = None
+    glottocode: str = ""
+    family: str = ""
 
     # Glottolog-data
     glottolog: Dict[str, Any] = field(default_factory=dict)
@@ -79,9 +79,5 @@ class Language:
     pos_stats: Dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Palauttaa datan JSON-yhteensopivana dictinä.
-        Unified-pipeline käyttää __dict__ suoraan, mutta tämä on varalla.
-        """
-        return self.__dict__
-
+        """Palauttaa datan puhdistettuna JSON-yhteensopivana dictinä."""
+        return asdict(self)

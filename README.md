@@ -76,7 +76,7 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
   "uralicNLP": true,
   "written": true,
   "written_scripts": ["Latn"],
-  "glottocode": "finn1255",
+  "glottocode": "finn1318",
   "family": "Uralic",
   "glottolog": {...},
   "pos_stats": {...},

@@ -3,7 +3,7 @@
 #
 # Global Language Family Mapper (GLFM)
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.1.0
+# Version 1.0.2
 #
 # https://codeberg.org/lahtis/GLFM
 #
@@ -50,27 +50,19 @@ GENERATE_REPORT = TOOLS / "generate_report.py"
 VISUALIZE_FALLBACKS = TOOLS / "visualize_fallbacks.py"
 
 
-def run(title: str, script: Path):
+def run(title: str, script: Path) -> bool:
     print(f"\n=== {title} ===")
-    print(f"Running: {script}")
+    print(f"Running: {script}\n")
 
-    result = subprocess.run(
-        [sys.executable, str(script)],
-        capture_output=True,
-        text=True
-    )
+    # Inherit stdout and stderr to display logs directly in real time
+    process = subprocess.Popen([sys.executable, str(script)])
+    process.wait()
 
-    if result.stdout:
-        print(result.stdout)
-
-    if result.stderr:
-        print("ERROR:", result.stderr)
-
-    if result.returncode != 0:
-        print(f" {title} FAILED")
+    if process.returncode != 0:
+        print(f"\n[FAILED] {title} (Exit code: {process.returncode})")
         return False
 
-    print(f" {title} OK")
+    print(f"\n[OK] {title}")
     return True
 
 
@@ -95,17 +87,22 @@ def main():
     all_ok = True
 
     for title, script in steps:
+        if not script.exists():
+            print(f"\n[ERROR] Script not found at {script}")
+            all_ok = False
+            break
+
         ok = run(title, script)
         if not ok:
             all_ok = False
-            break   # pysäytä pipeline heti virheestä
+            break  # Stop pipeline immediately on error
 
     print("\n========================================")
     if all_ok:
         print(" FULL PIPELINE COMPLETED SUCCESSFULLY")
         print(" Reports and graphs are in output/validation/")
     else:
-        print(" PIPELINE COMPLETED WITH ERRORS ")
+        print(" PIPELINE COMPLETED WITH ERRORS")
         print(" Check the logs above for details.")
     print("========================================")
 

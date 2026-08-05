@@ -63,33 +63,58 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
 
 ```json
 "fin": {
+  "bcp47": "fi-Latn-FI",
+  "default_region": "FI",
+  "default_script": "Latn",
+  "distance_bases": [
+    "WALS",
+    "SSWL",
+    "PHOIBLE",
+    "Ethnologue",
+    "Glottolog"
+  ],
+  "distance_source": "lang2vec / URIEL",
+  "distance_type": "fam",
+  "fallback": "fin",
+  "family": "",
+  "glottocode": "",
+  "glottolog": {},
   "id": "fin",
-  "name": "Finnish",
-  "official_name": "Finnish",
   "iso639_1": "fi",
   "iso639_2B": "fin",
   "iso639_2T": "fin",
   "iso639_3": "fin",
   "iso639_5": "",
-  "default_script": "Latn",
-  "default_region": "FI",
-  "bcp47": "fi-Latn-FI",
-  "fallback": "fin",
+  "name": "Finnish",
+  "nearest_languages": [
+    {
+      "lang": "est",
+      "distance": 0.0003
+    },
+    {
+      "lang": "izh",
+      "distance": 0.0003
+    },
+    {
+      "lang": "liv",
+      "distance": 0.0003
+    },
+    {
+      "lang": "vep",
+      "distance": 0.0003
+    },
+    {
+      "lang": "vot",
+      "distance": 0.0003
+    }
+  ],
+  "official_name": "Finnish",
+  "pos_stats": {},
   "uralicNLP": true,
   "written": true,
-  "written_scripts": ["Latn"],
-  "glottocode": "finn1318",
-  "family": "Uralic",
-  "glottolog": {...},
-  "pos_stats": {...},
-  "nearest_languages": [
-    {"lang": "est", "distance": 0.15},
-    {"lang": "krl", "distance": 0.22},
-    {"lang": "vep", "distance": 0.28}
-  ],
-  "distance_source": "lang2vec / URIEL",
-  "distance_type": "fam",
-  "distance_bases": ["WALS", "SSWL", "PHOIBLE", "Ethnologue", "Glottolog"]
+  "written_scripts": [
+    "Latn"
+  ]
 }
 ```
 

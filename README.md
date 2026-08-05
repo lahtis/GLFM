@@ -15,6 +15,12 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 
 ---
 
+## Primary Links
+- Canonical Repository (Codeberg): https://codeberg.org/lahtis/GLFM
+- GitHub Mirror: https://github.com/lahtis/GLFM
+
+---
+
 ## Features
 
 * **7,900+ Languages:** Unified from ISO 639-1/2/3/5, Wiktionary, CLDR, Glottolog, and POS statistics.
@@ -266,6 +272,12 @@ This project aggregates and unifies data from multiple linguistic databases:
 - **URIEL / lang2vec:** Typological vector representations derived from URIEL knowledge base.
 - **ISO 639:** Language code standards (ISO 639-1, 639-2, 639-3).
 - **CLDR / Wiktionary:** Locale display names, scripts, and part-of-speech statistics.
+
+---
+
+## Contributing & Issues
+
+This project is primary developed on Codeberg. Please submit issues, feature requests, and pull requests to the primary repository: https://codeberg.org/lahtis/GLFM
 
 ---
 

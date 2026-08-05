@@ -31,27 +31,27 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 ## Directory Structure
 
 ```text
-├── build_unified.py                # Build unified JSON database
-├── data/                           # Raw and processed language data
+├── build_unified.py                  # Build unified JSON database
+├── data/                             # Raw and processed language data
 │   ├── cldr/
 │   │   └── likelySubtags.json
-│   ├── iso_639_*.py                # ISO datasets in Python format
+│   ├── iso_639_*.py                  # ISO datasets in Python format
 │   ├── override_scripts.json
 │   ├── uralic_languages.json
 │   └── ...
-├── loaders/                        # Data loading modules
-├── logic/                          # Logic for scripts, regions, fallbacks, BCP-47
-├── models/                         # Data models (Language class, ISO modules)
-├── output/                         # Pipeline output
-│   ├── unified/                    # unified_languages.json
-│   ├── validation/                 # validation reports, errors, fallback graph
+├── loaders/                          # Data loading modules
+├── logic/                            # Logic for scripts, regions, fallbacks, BCP-47
+├── models/                           # Data models (Language class, ISO modules)
+├── output/                           # Pipeline output
+│   ├── unified/                      # unified_languages.json
+│   ├── validation/                   # validation reports, errors, fallback graph
 │   ├── final/
 │   ├── dialects/
 │   └── logs/
-├── tools/                          # Validation, report generation, and helpers
+├── tools/                            # Validation, report generation, and helpers
 │   ├── compute_nearest_languages.py  # Compute nearest language neighbors
 │   └── ...
-├── run_full_pipeline.py            # Run full pipeline: build → validate → report
+├── run_full_pipeline.py              # Run full pipeline: build → validate → report
 └── init.py
 ```
 
@@ -119,17 +119,23 @@ The pipeline is fully automated:
    - HTML report (`validation_report.html`)
    - JSON error log (`validation_errors.json`)
 6. **Visualize Fallback Graph** (`visualize_fallbacks.py`)
+7. **Build Supplemental Data**:
+   - Extinct languages dataset (`build_extinct_json.py`)
+   - Top-5 fallback optimization (`build_top5.py`)
+8. **Compress & Convert Outputs**:
+   - Standard library package (`compress_stdlib.py`)
+   - Binary dataset (`convert_to_msgpack.py`)
 
 ---
 
 ## Requirements
 
-* Python 3.8+
-* Core dependencies: 'numpy>=1.26.0,<2.0.0', 'setuptools>=69.0.0'
-* Language data: 'lang2vec>=1.1.0'
-* Data processing: 'requests>=2.28.0'
-* Visualization (optional): 'graphviz>=0.20.0'
-* Testing (optional): 'pytest>=7.0.0'
+* **Python 3.8+**
+* **Core dependencies:** `numpy>=1.26.0,<2.0.0`, `setuptools>=69.0.0`
+* **Language data:** `lang2vec>=1.1.0`
+* **Data processing:** `requests>=2.28.0`, `msgpack>=1.0.5`
+* **Visualization (optional):** `graphviz>=0.20.0`
+* **Testing (optional):** `pytest>=7.0.0`
 
 ---
 
@@ -138,19 +144,34 @@ The pipeline is fully automated:
 ### Run the full pipeline
 
 ```bash
-git clone https://codeberg.org/lahtis/GLFM.git
+git clone [https://codeberg.org/lahtis/GLFM.git](https://codeberg.org/lahtis/GLFM.git)
+cd GLFM
 pip install -r requirements.txt
 
 python3 run_full_pipeline.py
 ```
 
-Run nearest-language step manually
-
+### Run nearest-language step manually
+If you need to run or resume the heavy nearest-languages calculation separately:
 ```bash
 python3 tools/compute_nearest_languages.py
 ```
 
 Note: Checkpoints are saved automatically to output/unified/nearest_languages.checkpoint.json and allow interrupted runs to resume seamlessly.
+
+## Build optimized Top-5 fallbacks dataset
+
+### Generate extinct languages dataset
+```bash
+python3 logic/build_extinct_json.py
+```
+
+### Build optimized fallbacks dataset (top 20 candidates per language)
+```bash
+python3 tools/build_top5.py --top-k 20
+```
+
+**Note:** The `build_top5.py` script takes `--top-k 20` (or `-k 20`) to specify how many fallback candidates are stored per language.
 
 ---
 
@@ -180,13 +201,46 @@ for neighbor in finnish.get("nearest_languages", [])[:10]:
     print(f"{neighbor['lang']}: {neighbor['distance']:.4f}")
 ```
 
+### Access data from compressed archive
+
+```python
+import gzip
+import json
+from pathlib import Path
+
+# Load compressed database (.json.gz)
+database_path = Path("output/unified/languages_top20.json.gz")
+with gzip.open(database_path, "rt", encoding="utf-8") as f:
+    languages = json.load(f)
+
+# Access language data
+finnish = languages.get("fin", {})
+print(finnish.get("bcp47"))  # fi-Latn-FI
+
+# Get 10 nearest languages to Finnish
+for neighbor in finnish.get("nearest_languages", [])[:10]:
+    print(f"{neighbor['lang']}: {neighbor['distance']:.4f}")
+```
+
+
 ## Notes
 
-- `uralic_languages.json` must be present for Uralic support; the pipeline will warn if missing.
-- The unified database integrates ISO, Wiktionary, CLDR, Glottolog, and POS stats.
-- Fallback chains ensure robust language detection for RSS feeds and software localization.
-- `nearest_languages` s computed using URIEL/lang2vec typological features (family, syntax, phonology, inventory).
+- `uralic_languages.json` must be present for Uralic language support; the pipeline will issue a warning if missing.
+- The unified database integrates data from ISO, Wiktionary, CLDR, and POS statistics (Glottolog integration is currently referenced in codebase for future work).
+- Fallback chains ensure robust language resolution for RSS feeds, locale matching, and software localization.
+- The `nearest_languages` field is computed using URIEL/lang2vec typological features (family, syntax, phonology, and inventory).
 - Distance scores range from `0.0` (identical features) to `1.0` (completely different).
+---
+
+## Data Sources & Acknowledgments
+
+This project aggregates and unifies data from multiple linguistic databases:
+
+- **Glottolog:** Comprehensive bibliographic data and genealogical classification for world languages. 
+  *Hammarström, Harald & Forkel, Robert & Haspelmath, Martin & Bank, Sebastian. Glottolog.* ([glottolog.org](https://glottolog.org/))
+- **URIEL / lang2vec:** Typological vector representations derived from URIEL knowledge base.
+- **ISO 639:** Language code standards (ISO 639-1, 639-2, 639-3).
+- **CLDR / Wiktionary:** Locale display names, scripts, and part-of-speech statistics.
 
 ---
 

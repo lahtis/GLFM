@@ -1,0 +1,82 @@
+name: Mirror Codeberg to GitHub (Debug)
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Show environment
+        run: |
+          echo "=== Environment ==="
+          pwd
+          whoami
+          git --version
+          echo
+
+      - name: Clone Codeberg repository
+        run: |
+          echo "=== Cloning Codeberg ==="
+          git clone --mirror https://codeberg.org/lahtis/GLFM.git repo.git
+
+      - name: Inspect repository
+        run: |
+          cd repo.git
+
+          echo "=== Latest commit ==="
+          git log -1 --stat
+
+          echo
+          echo "=== Branches ==="
+          git branch -a
+
+          echo
+          echo "=== Tags ==="
+          git tag
+
+          echo
+          echo "=== Remotes ==="
+          git remote -v
+
+          echo
+          echo "=== References ==="
+          git show-ref | head -30
+
+      - name: Configure GitHub remote
+        env:
+          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+        run: |
+          cd repo.git
+
+          echo "=== Configuring GitHub remote ==="
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/lahtis/GLFM.git
+
+          echo
+          echo "=== Remotes after update ==="
+          git remote -v | sed 's/x-access-token:.*/x-access-token:***@github.com\/lahtis\/GLFM.git/'
+
+      - name: Push mirror
+        env:
+          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+        run: |
+          cd repo.git
+
+          echo "=== Pushing mirror ==="
+
+          set -x
+          git push --mirror
+          set +x
+
+      - name: Finished
+        run: |
+          echo
+          echo "===================================="
+          echo "Mirror completed successfully."
+          echo "===================================="

@@ -72,7 +72,7 @@ GLFM/
 ## Data Structure (`unified_languages.json`)
 
 Each language is represented as a JSON object keyed by its ISO 639-3 code:
-```text
+```json
 "fin": {
   "bcp47": "fi-Latn-FI",
   "default_region": "FI",
@@ -192,7 +192,7 @@ python3 -m glfm.run_full_pipeline --list
 - Environment variables: `GLFM_DATA_DIR`, `GLFM_CACHE_DIR`, `GLFM_OUTPUT_DIR`, `GLFM_ISO_639_3_URL`, etc.
 
 Example:
-```python
+```toml
 [sources.iso_639_3]
 
 url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
@@ -203,7 +203,7 @@ version  = "48.0.0"
 
 [sources.wikidata]
 
-endpoint = "https ://query.wikidata.org/sparql"
+endpoint = "https://query.wikidata.org/sparql"
 
 [paths]
 
@@ -221,11 +221,11 @@ python3 -m glfm.download
 ```
 Or generate data from sources:
 ```bash
-python3 -m glfm.run _full _pipeline  --only generate glottolog
+python3 -m glfm.run_full_pipeline  --only generate glottolog
 ```
 ### 2 . Run the full pipeline
 ```bash
-python3 -m glfm.run _full _pipeline
+python3 -m glfm.run_full_pipeline
 ```
 ### 3 . Access data in Python
 
@@ -275,9 +275,9 @@ pip install glfm
 tai
 
 ```bash
-git clone https ://codeberg.org/lahtis/GLFM.git
+git clone https://codeberg.org/lahtis/GLFM.git
 cd GLFM
-pip install  -e ". [dev]"
+pip install -e ". [dev]"
 ```
 ---
 
@@ -292,7 +292,7 @@ pip install  -e ". [dev]"
 
 ## Contributing & Issues
 
-[https ://codeberg.org/lahtis/GLFM](https://codeberg.org/lahtis/GLFM)
+[https://codeberg.org/lahtis/GLFM](https://codeberg.org/lahtis/GLFM)
 
 ---
 

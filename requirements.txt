@@ -1,7 +1,0 @@
-# Minimal requirements for GLFM pipeline
-numpy>=1.26.0,<2.0.0
-setuptools>=69.0.0
-lang2vec>=1.1.0
-requests>=2.28.0
-graphviz>=0.20
-msgpack>=1.0.5

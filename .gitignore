@@ -1,32 +1,23 @@
-# Virtual Environment
-.venv/
-venv/
-ENV/
+# Output (generoidaan)
+/output/
 
-# Python cache & build files
+# Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.python-version
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
 
-# GLFM Output Directories
-output/dialects/
-output/final/
-output/logs/
+# Venv
+venv/
+.venv/
 
-# GLFM Checkpoints & Temp files
-*.checkpoint.json
-*.checkpoint.json.tmp
-*.tmp
-output/unified/unified_languages.json
-
-# IDE / Editor specific
+# IDE
 .vscode/
 .idea/
 *.swp
-*~
 
-# OS specific
+# OS
 .DS_Store
-Thumbs.db

@@ -2,133 +2,187 @@
 
 A modular, JSON-based language database and validation pipeline for over 7,900 languages (ISO 639-3), including Uralic/Finno-Ugric languages. Designed for RSS feeds, localization, and NLP workflows.
 
-* **Author:** Tuomas Lähteenmäki
-* **License:** MIT
-* **Version:** 1.0.2
+- **Author:** Tuomas Lähteenmäki  
+- **License:** MIT  
+- **Version:** 1.0.4
 
 ---
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue) 
+![License](https://img.shields.io/badge/License-MIT-green) 
 ![Status](https://img.shields.io/badge/Status-Active-success)
-![Platform](https://img.shields.io/badge/Platform-Cross--platform-lightgrey)
 
 ---
 
 ## Primary Links
-- Canonical Repository (Codeberg): https://codeberg.org/lahtis/GLFM
-- GitHub Mirror: https://github.com/lahtis/GLFM
+
+- Canonical Repository (Codeberg): `https://codeberg.org/lahtis/GLFM`  
+- GitHub Mirror: `https://github.com/lahtis/GLFM`
 
 ---
 
 ## Features
 
-* **7,900+ Languages:** Unified from ISO 639-1/2/3/5, Wiktionary, CLDR, Glottolog, and POS statistics.
-* **Nearest Language Neighbors:** Each written language includes typologically nearest languages based on URIEL/lang2vec features (syntax, phonology, inventory, family).
-* **Accurate BCP-47 Tags:** Language, script, and region combined automatically.
-* **Fallback Chains:** Automatically assigns fallback languages where applicable.
-* **Uralic/Finno-Ugric Support:** Detailed mapping for Finnish, Karelian, Estonian, and related languages.
-* **Validation Pipeline:** Full automated checks for ISO consistency, BCP-47 compliance, fallback correctness, POS stats, and Glottolog data.
-* **Graphviz Visualization:** Fallback relationships can be visualized.
-* **Checkpoint/Resume Support:** Long-running nearest-language computations can be resumed automatically from a checkpoint.
+- **7,900+ Languages:** Unified from ISO 639-1/2/3/5, Wikidata (Glottolog), CLDR, and POS statistics.  
+- **Nearest Language Neighbors:** Each written language includes typologically nearest languages based on URIEL/lang2vec features (syntax, phonology, inventory, family).  
+- **Accurate BCP-47 Tags:** Language, script, and region combined automatically.  
+- **Fallback Chains:** Automatically assigns fallback languages where applicable.  
+- **Uralic/Finno-Ugric Support:** Detailed mapping for Finnish, Karelian, Estonian, and related languages.  
+- **Validation Pipeline:** Full automated checks for ISO consistency, BCP-47 compliance, fallback correctness, POS stats, and Glottolog data.  
+- **Checkpoint/Resume Support:** Long-running nearest-language computations can be resumed automatically from a checkpoint.
 
 ---
 
 ## Directory Structure
-
 ```text
-├── build_unified.py                  # Build unified JSON database
-├── data/                             # Raw and processed language data
-│   ├── cldr/
-│   │   └── likelySubtags.json
-│   ├── iso_639_*.py                  # ISO datasets in Python format
-│   ├── override_scripts.json
-│   ├── uralic_languages.json
-│   └── ...
-├── loaders/                          # Data loading modules
-├── logic/                            # Logic for scripts, regions, fallbacks, BCP-47
-├── models/                           # Data models (Language class, ISO modules)
-├── output/                           # Pipeline output
-│   ├── unified/                      # unified_languages.json
-│   ├── validation/                   # validation reports, errors, fallback graph
-│   ├── final/
-│   ├── dialects/
+GLFM/
+├── pyproject.toml
+├── config.toml                      # Oletuskonfiguraatio
+├── README.md
+├── LICENCE
+├── output/                          # Pipeline-tuotokset (.gitignore)
+│   ├── unified/                     # unified _languages.json, languages _top20.json.gz
+│   ├── validation/                  # validation _report.md/html, errors
 │   └── logs/
-├── tools/                            # Validation, report generation, and helpers
-│   ├── compute_nearest_languages.py  # Compute nearest language neighbors
-│   └── ...
-├── run_full_pipeline.py              # Run full pipeline: build → validate → report
-└── init.py
+├── src/
+│   └── glfm/
+│       ├──  _ _init _ _.py
+│       ├──  _version.py
+│       ├── paths.py                 # Polut (cache, data, output)
+│       ├── config.py                # Konfiguraatio
+│       ├── download.py              # Datan lataus
+│       ├── build _unified.py         # Unified-tietokannan rakennus
+│       ├── run _full _pipeline.py     # Koko pipeline
+│       ├── data/                    # Sisäinen data (paketissa)
+│       │   ├── override _scripts.json
+│       │   └── uralic _languages.json
+│       ├── loaders/                 # Datalähteiden lataus
+│       ├── logic/                   # Logiikka (script, region, fallback, BCP-47)
+│       ├── models/                  # Datamallit (Language)
+│       └── tools/                   # Validaattorit, raportit, apuskriptit
+└── venv/
 ```
+> Note: Downloadable data (`iso_639_*.py`, `glottolog.json`, `cldr/`) lives in the cache (`~/.cache/glfm/data/`), not in the repo. Bundled data (`override_scripts.json`, `uralic_languages.json`) is shipped with the package (`src/glfm/data/`).
 
 ---
 
 ## Data Structure (`unified_languages.json`)
 
 Each language is represented as a JSON object keyed by its ISO 639-3 code:
-
-```json
+```text
 "fin": {
+
   "bcp47": "fi-Latn-FI",
-  "default_region": "FI",
-  "default_script": "Latn",
-  "distance_bases": [
+
+  "default _region": "FI",
+
+  "default _script": "Latn",
+
+  "distance _bases":  [
+
     "WALS",
+
     "SSWL",
+
     "PHOIBLE",
+
     "Ethnologue",
+
     "Glottolog"
-  ],
-  "distance_source": "lang2vec / URIEL",
-  "distance_type": "fam",
+
+   ],
+
+  "distance _source": "lang2vec / URIEL",
+
+  "distance _type": "fam",
+
   "fallback": "fin",
-  "family": "",
-  "glottocode": "",
-  "glottolog": {},
+
+  "family": "Finnic",
+
+  "glottocode": "finn1318",
+
+  "glottolog": {
+
+    "glottocode": "finn1318",
+
+    "iso639 _3": "fin",
+
+    "family": "Finnic",
+
+    "macroarea": "",
+
+    "latitude": 62.0,
+
+    "longitude": 25.0,
+
+    "lineage":  [ ],
+
+    "status": ""
+
+  },
+
   "id": "fin",
-  "iso639_1": "fi",
-  "iso639_2B": "fin",
-  "iso639_2T": "fin",
-  "iso639_3": "fin",
-  "iso639_5": "",
+
+  "iso639 _1": "fi",
+
+  "iso639 _2B": "fin",
+
+  "iso639 _2T": "fin",
+
+  "iso639 _3": "fin",
+
+  "iso639 _5": "",
+
+  "language _type": "L",
+
   "name": "Finnish",
-  "nearest_languages": [
+
+  "nearest _languages":  [
+
     {
+
       "lang": "est",
+
       "distance": 0.0003
+
     },
+
     {
+
       "lang": "izh",
+
       "distance": 0.0003
-    },
-    {
-      "lang": "liv",
-      "distance": 0.0003
-    },
-    {
-      "lang": "vep",
-      "distance": 0.0003
-    },
-    {
-      "lang": "vot",
-      "distance": 0.0003
+
     }
-  ],
-  "official_name": "Finnish",
-  "pos_stats": {},
+
+   ],
+
+  "official _name": "Finnish",
+
+  "pos _stats": {},
+
   "uralicNLP": true,
+
   "written": true,
-  "written_scripts": [
+
+  "written _scripts":  [
+
     "Latn"
-  ]
+
+   ]
+
 }
 ```
 
-- `bcp47` is automatically generated: `lang[-Script][-Region]`.
-- `fallback` is the default fallback language.
-- `uralicNLP` is true if the language belongs to the Uralic/Finno-Ugric family.
-- `written_scripts` lists all known writing scripts.
-- `nearest_languages` ranks typologically nearest written languages by distance (0.0 = identical features, 1.0 = completely different).
+- `bcp47` is automatically generated: `lang[-Script][-Region]`.  
+- `fallback` is the default fallback language.  
+- `uralicNLP` is true if the language belongs to the Uralic/Finno-Ugric family.  
+- `written_scripts` lists all known writing scripts.  
+- `nearest_languages` ranks typologically nearest written languages by distance (up to 100 max _neighbors).  
+- `language_type` is SIL Language Type (L  = Living, E  = Extinct, H  = Historical, A  = Ancient, C  = Constructed).  
+- `family` is Glottolog family name (e.g. "Finnic"), not an ISO 639-5 code.  
+- `glottocode` is Glottolog language code (e.g. "finn1318").
 
 ---
 
@@ -136,155 +190,180 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
 
 The pipeline is fully automated:
 
-1. **Generate ISO files** (`tools/generate_iso_files.py`)
-2. **Build Unified Database** (`build_unified.py`)
-3. **Compute Nearest Languages** (`tools/compute_nearest_languages.py`) – adds `nearest_languages` field to all written languages (supports checkpoint/resume for long runs)
-4. **Validate**:
-   - BCP-47 tags (`validate_bcp47.py`)
-   - Fallback chains (`validate_fallbacks.py`)
-   - ISO consistency (`validate_iso_consistency.py`)
-   - POS statistics (`validate_pos_stats.py`)
-   - Glottolog data (`validate_glottolog.py`)
-5. **Generate Validation Reports** (`generate_report.py`):
-   - Markdown report (`validation_report.md`)
-   - HTML report (`validation_report.html`)
-   - JSON error log (`validation_errors.json`)
-6. **Visualize Fallback Graph** (`visualize_fallbacks.py`)
-7. **Build Supplemental Data**:
-   - Extinct languages dataset (`build_extinct_json.py`)
-   - Top-5 fallback optimization (`build_top5.py`)
-8. **Compress & Convert Outputs**:
-   - Standard library package (`compress_stdlib.py`)
-   - Binary dataset (`convert_to_msgpack.py`)
+generate ISO → build glottolog → build unified → compute nearest → build consumer → validate → report → visualize
+
+| Step | Module | Description |
+| :---- | :---- | :---- |
+| generate | `glfm.tools.generate_iso_files` | Download ISO 639 sources |
+| glottolog | `glfm.tools.build_glottolog_json` | Fetch Glottolog metadata (Wikidata) |
+| build | `glfm.build_unified` | Build unified database |
+| compute | `glfm.tools.compute_nearest_languages` | Compute neighbors (lang2vec) |
+| consumer | `glfm.tools.build_consumer_dataset` | Build consumer dataset (top-20) |
+| bcp47 | `glfm.tools.validate_bcp47` | Validate BCP-47 |
+| fallbacks | `glfm.tools.validate_fallbacks` | Validate fallbacks |
+| iso | `glfm.tools.validate_iso_consistency` | Validate ISO codes |
+| pos | `glfm.tools.validate_pos_stats` | Validate POS statistics |
+| glotto | `glfm.tools.validate_glottolog` | Validate Glottolog |
+| report | `glfm.tools.generate_report` | Generate reports |
+| viz | `glfm.tools.visualize_fallbacks` | Visualize fallbacks (optional) |
+
+---
+
+## CLI
+
+# Full pipeline
+```Python
+python3 -m glfm.run_full_pipeline
+```
+# Skip heavy neighbor computation
+```Python
+python3 -m glfm.run_full_pipeline --skip compute
+```
+# Run only selected steps
+```Python
+python3 -m glfm.run_full_pipeline --only build bcp47
+```
+# List steps
+```Python
+python3 -m glfm.run_full_pipeline --list
+```
+---
+
+## Configuration
+
+`config.toml` (repo root) contains default values. Users can override:
+
+- `~/.config/glfm/config.toml`  
+- Environment variables: `GLFM_DATA_DIR`, `GLFM_CACHE_DIR`, `GLFM_OUTPUT_DIR`, `GLFM_ISO_639_3_URL`, etc.
+
+Example:
+
+ [sources.iso _639 _3 ]
+
+url  = "https ://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
+
+ [sources.cldr ]
+
+version  = "48.0.0"
+
+ [sources.wikidata ]
+
+endpoint  = "https ://query.wikidata.org/sparql"
+
+ [paths ]
+
+data _dir  = ""        # empty  =  ~/.cache/glfm/data
+
+cache _dir  = ""       # empty  =  ~/.cache/glfm
+
+---
+
+## Quick Start
+
+### 1 . Download data
+
+python3  -m glfm.download
+
+Or generate data from sources:
+
+python3  -m glfm.run _full _pipeline  --only generate glottolog
+
+### 2 . Run the full pipeline
+
+python3  -m glfm.run _full _pipeline
+
+### 3 . Access data in Python
+
+import json
+
+from pathlib import Path
+
+unified  = Path("output/unified/unified _languages.json")
+
+with unified.open() as f:
+
+    languages  = json.load(f)
+
+fin  = languages ["fin" ]
+
+print(fin ["bcp47" ])                # fi-Latn-FI
+
+print(fin ["family" ])               # Finnic
+
+print(fin ["glottocode" ])           # finn1318
+
+print(fin ["uralicNLP" ])            # True
+
+print(fin ["nearest _languages" ] [:5 ])   # Top 5 nearest languages
+
+### 4 . Consumer dataset (top-20 neighbors)
+
+import gzip
+
+import json
+
+with gzip.open("output/unified/languages _top20.json.gz", "rt") as f:
+
+    languages  = json.load(f)
+
+fin  = languages ["fin" ]
+
+for nb in fin ["nearest _languages" ] [:10 ]:
+
+    print(f"{nb ['lang' ]}: {nb ['distance' ]:.4f}")
 
 ---
 
 ## Requirements
 
-* **Python 3.8+**
-* **Core dependencies:** `numpy>=1.26.0,<2.0.0`, `setuptools>=69.0.0`
-* **Language data:** `lang2vec>=1.1.0`
-* **Data processing:** `requests>=2.28.0`, `msgpack>=1.0.5`
-* **Visualization (optional):** `graphviz>=0.20.0`
-* **Testing (optional):** `pytest>=7.0.0`
+- **Python 3.9+**  
+- **Core dependencies:** none (pure stdlib)  
+- **Dev dependencies:** `numpy`, `requests`, `msgpack`, `lang2vec`, `graphviz`, `pytest`
 
----
+### Installation:
 
-## Usage
+git clone https ://codeberg.org/lahtis/GLFM.git
 
-### Run the full pipeline
-
-```bash
-git clone [https://codeberg.org/lahtis/GLFM.git](https://codeberg.org/lahtis/GLFM.git)
 cd GLFM
-pip install -r requirements.txt
 
-python3 run_full_pipeline.py
-```
+pip install  -e ". [dev ]"
 
-### Run nearest-language step manually
-If you need to run or resume the heavy nearest-languages calculation separately:
-```bash
-python3 tools/compute_nearest_languages.py
-```
-
-Note: Checkpoints are saved automatically to output/unified/nearest_languages.checkpoint.json and allow interrupted runs to resume seamlessly.
-
-## Build optimized Top-5 fallbacks dataset
-
-### Generate extinct languages dataset
-```bash
-python3 logic/build_extinct_json.py
-```
-
-### Build optimized fallbacks dataset (top 20 candidates per language)
-```bash
-python3 tools/build_top5.py --top-k 20
-```
-
-**Note:** The `build_top5.py` script takes `--top-k 20` (or `-k 20`) to specify how many fallback candidates are stored per language.
-
----
-
-### Access data in Python
-
-```python
-import json
-from pathlib import Path
-
-unified_file = Path("output/unified/unified_languages.json")
-with unified_file.open("r", encoding="utf-8") as f:
-    languages = json.load(f)
-
-# Access Finnish
-finnish = languages.get("fin")
-print(finnish["bcp47"])         # fi-Latn-FI
-print(finnish["uralicNLP"])     # True
-print(finnish["nearest_languages"][:5]) # Top 5 nearest languages
-```
-
-### Find nearest languages
-
-```python
-# Get 10 nearest languages to Finnish
-finnish = languages.get("fin", {})
-for neighbor in finnish.get("nearest_languages", [])[:10]:
-    print(f"{neighbor['lang']}: {neighbor['distance']:.4f}")
-```
-
-### Access data from compressed archive
-
-```python
-import gzip
-import json
-from pathlib import Path
-
-# Load compressed database (.json.gz)
-database_path = Path("output/unified/languages_top20.json.gz")
-with gzip.open(database_path, "rt", encoding="utf-8") as f:
-    languages = json.load(f)
-
-# Access language data
-finnish = languages.get("fin", {})
-print(finnish.get("bcp47"))  # fi-Latn-FI
-
-# Get 10 nearest languages to Finnish
-for neighbor in finnish.get("nearest_languages", [])[:10]:
-    print(f"{neighbor['lang']}: {neighbor['distance']:.4f}")
-```
-
-
-## Notes
-
-- `uralic_languages.json` must be present for Uralic language support; the pipeline will issue a warning if missing.
-- The unified database integrates data from ISO, Wiktionary, CLDR, and POS statistics (Glottolog integration is currently referenced in codebase for future work).
-- Fallback chains ensure robust language resolution for RSS feeds, locale matching, and software localization.
-- The `nearest_languages` field is computed using URIEL/lang2vec typological features (family, syntax, phonology, and inventory).
-- Distance scores range from `0.0` (identical features) to `1.0` (completely different).
 ---
 
 ## Data Sources & Acknowledgments
 
-This project aggregates and unifies data from multiple linguistic databases:
-
-- **Glottolog:** Comprehensive bibliographic data and genealogical classification for world languages. 
-  *Hammarström, Harald & Forkel, Robert & Haspelmath, Martin & Bank, Sebastian. Glottolog.* ([glottolog.org](https://glottolog.org/))
-- **URIEL / lang2vec:** Typological vector representations derived from URIEL knowledge base.
-- **ISO 639:** Language code standards (ISO 639-1, 639-2, 639-3).
-- **CLDR / Wiktionary:** Locale display names, scripts, and part-of-speech statistics.
+- **Glottolog:** Hammarström, Harald & Forkel, Robert & Haspelmath, Martin & Bank, Sebastian. Glottolog. (glottolog.org) – fetched via Wikidata SPARQL.  
+- **URIEL / lang2vec:** Typological vector representations.  
+- **ISO 639:** Language code standards (ISO 639-1, 639-2, 639-3, 639-5).  
+- **CLDR / Wiktionary:** Locale display names, scripts.
 
 ---
 
 ## Contributing & Issues
 
-This project is primary developed on Codeberg. Please submit issues, feature requests, and pull requests to the primary repository: https://codeberg.org/lahtis/GLFM
+[https ://codeberg.org/lahtis/GLFM](https://codeberg.org/lahtis/GLFM)
 
 ---
 
 ## License
 
-Copyright © 2026 Tuomas Lähteenmäki
+Copyright © 2026 Tuomas Lähteenmäki  
+MIT License. See LICENSE for details.
 
-This project is licensed under the MIT License. You may use, modify, and distribute the data, provided the original copyright notice is retained.
+---
 
-See LICENSE for details.
+## Key changes
+
+|  # | Section | Change |
+| :---- | :---- | :---- |
+| 1 | Python version | `3.8+` → **`3.9+`** |
+| 2 | Directory Structure | **`src/glfm/` layout** |
+| 3 | Data Structure | **`family: "Finnic"`**, `glottocode: "finn1318"`, `language_type: "L"` |
+| 4 | `nearest_languages` | 5 → **100** (max) |
+| 5 | Pipeline Overview | **12 steps** (incl. `glottolog`, `consumer`) |
+| 6 | CLI | **`python3 -m glfm.run_full_pipeline`** |
+| 7 | Configuration | **`config.toml`**  + env vars |
+| 8 | Requirements | **No core dependencies** (pure stdlib) |
+| 9 | `build_top5.py` | **`build_consumer_dataset.py`** |
+| 10 | "Glottolog future work" | **Glottolog works** (Wikidata) |
+

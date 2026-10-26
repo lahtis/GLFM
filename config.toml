@@ -1,0 +1,36 @@
+[sources.iso_639_3]
+url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
+
+[sources.iso_639_3_names]
+url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3_Name_Index.tab"
+
+[sources.iso_639_3_macrolanguages]
+url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3-macrolanguages.tab"
+
+[sources.iso_639_5]
+url = "https://id.loc.gov/vocabulary/iso639-5.skos.rdf"
+
+[sources.cldr]
+version = "48.0.0"
+url = "https://raw.githubusercontent.com/unicode-org/cldr-json/48.0.0/cldr-json/cldr-core/supplemental/likelySubtags.json"
+
+[sources.wikidata]
+endpoint = "https://query.wikidata.org/sparql"
+
+[download]
+url = "https://codeberg.org/lahtis/GLFM/releases/download/v1.0.4/data.zip"
+sha256 = ""
+timeout = 300
+
+[http]
+user_agent = "glfm/1.0.4 (https://codeberg.org/lahtis/GLFM)"
+timeout = 60
+
+[paths]
+cache_dir = ""
+data_dir = ""
+cache_dir_name = "glfm"
+data_subdir = "data"
+
+[logging]
+level = "INFO"

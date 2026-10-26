@@ -62,6 +62,7 @@ GLFM/
 │       └── tools/                   # Validaattorit, raportit, apuskriptit
 └── venv/
 ```
+
 > Note: Downloadable data (`iso_639_*.py`, `glottolog.json`, `cldr/`) lives in the cache (`~/.cache/glfm/data/`), not in the repo. Bundled data (`override_scripts.json`, `uralic_languages.json`) is shipped with the package (`src/glfm/data/`).
 
 ---
@@ -71,107 +72,56 @@ GLFM/
 Each language is represented as a JSON object keyed by its ISO 639-3 code:
 ```text
 "fin": {
-
   "bcp47": "fi-Latn-FI",
-
   "default _region": "FI",
-
   "default _script": "Latn",
-
   "distance _bases":  [
-
     "WALS",
-
     "SSWL",
-
     "PHOIBLE",
-
     "Ethnologue",
-
     "Glottolog"
-
    ],
-
   "distance _source": "lang2vec / URIEL",
-
   "distance _type": "fam",
-
   "fallback": "fin",
-
   "family": "Finnic",
-
   "glottocode": "finn1318",
-
   "glottolog": {
-
     "glottocode": "finn1318",
-
     "iso639 _3": "fin",
-
     "family": "Finnic",
-
     "macroarea": "",
-
     "latitude": 62.0,
-
     "longitude": 25.0,
-
     "lineage":  [ ],
-
     "status": ""
-
   },
-
   "id": "fin",
-
   "iso639 _1": "fi",
-
   "iso639 _2B": "fin",
-
   "iso639 _2T": "fin",
-
   "iso639 _3": "fin",
-
   "iso639 _5": "",
-
   "language _type": "L",
-
   "name": "Finnish",
-
   "nearest _languages":  [
-
     {
-
       "lang": "est",
-
       "distance": 0.0003
-
     },
-
     {
-
       "lang": "izh",
-
       "distance": 0.0003
-
     }
-
    ],
-
   "official _name": "Finnish",
-
   "pos _stats": {},
-
   "uralicNLP": true,
-
   "written": true,
-
   "written _scripts":  [
-
     "Latn"
-
    ]
-
 }
 ```
 
@@ -212,19 +162,22 @@ generate ISO → build glottolog → build unified → compute nearest → build
 ## CLI
 
 # Full pipeline
-```Python
+```bash
 python3 -m glfm.run_full_pipeline
 ```
+
 # Skip heavy neighbor computation
-```Python
+```bash
 python3 -m glfm.run_full_pipeline --skip compute
 ```
+
 # Run only selected steps
-```Python
+```bash
 python3 -m glfm.run_full_pipeline --only build bcp47
 ```
+
 # List steps
-```Python
+```bash
 python3 -m glfm.run_full_pipeline --list
 ```
 ---
@@ -237,7 +190,7 @@ python3 -m glfm.run_full_pipeline --list
 - Environment variables: `GLFM_DATA_DIR`, `GLFM_CACHE_DIR`, `GLFM_OUTPUT_DIR`, `GLFM_ISO_639_3_URL`, etc.
 
 Example:
-
+```python
  [sources.iso _639 _3 ]
 
 url  = "https ://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
@@ -255,62 +208,55 @@ endpoint  = "https ://query.wikidata.org/sparql"
 data _dir  = ""        # empty  =  ~/.cache/glfm/data
 
 cache _dir  = ""       # empty  =  ~/.cache/glfm
-
+```
 ---
 
 ## Quick Start
 
 ### 1 . Download data
-
+```bash
 python3  -m glfm.download
-
+```
 Or generate data from sources:
-
+```bash
 python3  -m glfm.run _full _pipeline  --only generate glottolog
-
+```
 ### 2 . Run the full pipeline
-
+```bash
 python3  -m glfm.run _full _pipeline
-
+```
 ### 3 . Access data in Python
 
+```python
 import json
 
 from pathlib import Path
 
 unified  = Path("output/unified/unified _languages.json")
-
 with unified.open() as f:
-
     languages  = json.load(f)
 
 fin  = languages ["fin" ]
-
 print(fin ["bcp47" ])                # fi-Latn-FI
-
 print(fin ["family" ])               # Finnic
-
 print(fin ["glottocode" ])           # finn1318
-
 print(fin ["uralicNLP" ])            # True
-
 print(fin ["nearest _languages" ] [:5 ])   # Top 5 nearest languages
+```
 
 ### 4 . Consumer dataset (top-20 neighbors)
 
+```python
 import gzip
-
 import json
 
 with gzip.open("output/unified/languages _top20.json.gz", "rt") as f:
-
     languages  = json.load(f)
 
 fin  = languages ["fin" ]
-
 for nb in fin ["nearest _languages" ] [:10 ]:
-
     print(f"{nb ['lang' ]}: {nb ['distance' ]:.4f}")
+```
 
 ---
 
@@ -321,13 +267,13 @@ for nb in fin ["nearest _languages" ] [:10 ]:
 - **Dev dependencies:** `numpy`, `requests`, `msgpack`, `lang2vec`, `graphviz`, `pytest`
 
 ### Installation:
-
+```bash
 git clone https ://codeberg.org/lahtis/GLFM.git
 
 cd GLFM
 
 pip install  -e ". [dev ]"
-
+```
 ---
 
 ## Data Sources & Acknowledgments

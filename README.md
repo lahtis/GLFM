@@ -37,29 +37,29 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 ```text
 GLFM/
 ├── pyproject.toml
-├── config.toml                      # Oletuskonfiguraatio
+├── config.toml                    # Default configuration
 ├── README.md
 ├── LICENCE
-├── output/                          # Pipeline-tuotokset (.gitignore)
-│   ├── unified/                     # unified _languages.json, languages _top20.json.gz
-│   ├── validation/                  # validation _report.md/html, errors
+├── output/                        # Pipeline outputs (.gitignore)
+│   ├── unified/                   # unified_languages.json, languages_top20.json.gz
+│   ├── validation/                # validation_report.md/html, errors
 │   └── logs/
 ├── src/
 │   └── glfm/
-│       ├──  _ _init _ _.py
-│       ├──  _version.py
-│       ├── paths.py                 # Polut (cache, data, output)
-│       ├── config.py                # Konfiguraatio
-│       ├── download.py              # Datan lataus
-│       ├── build _unified.py         # Unified-tietokannan rakennus
-│       ├── run _full _pipeline.py     # Koko pipeline
-│       ├── data/                    # Sisäinen data (paketissa)
-│       │   ├── override _scripts.json
-│       │   └── uralic _languages.json
-│       ├── loaders/                 # Datalähteiden lataus
-│       ├── logic/                   # Logiikka (script, region, fallback, BCP-47)
-│       ├── models/                  # Datamallit (Language)
-│       └── tools/                   # Validaattorit, raportit, apuskriptit
+│       ├── __init__.py
+│       ├── _version.py
+│       ├── paths.py               # Paths (cache, data, output)
+│       ├── config.py              # Configuration
+│       ├── download.py            # Data downloading
+│       ├── build_unified.py       # Unified database builder
+│       ├── run_full_pipeline.py   # Full pipeline
+│       ├── data/                  # Internal data (packaged)
+│       │   ├── override_scripts.json
+│       │   └── uralic_languages.json
+│       ├── loaders/               # Data source loaders
+│       ├── logic/                 # Logic (script, region, fallback, BCP-47)
+│       ├── models/                # Data models (Language)
+│       └── tools/                 # Validators, reports, helper scripts
 └── venv/
 ```
 

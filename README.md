@@ -8,9 +8,11 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 
 ---
 
+[![PyPI](https://img.shields.io/pypi/v/glfm)](https://pypi.org/project/glfm/)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue) 
 ![License](https://img.shields.io/badge/License-MIT-green) 
 ![Status](https://img.shields.io/badge/Status-Active-success)
+[![Downloads](https://static.pepy.tech/badge/glfm)](https://pepy.tech/project/glfm)
 
 ---
 
@@ -73,23 +75,23 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
 ```text
 "fin": {
   "bcp47": "fi-Latn-FI",
-  "default _region": "FI",
-  "default _script": "Latn",
-  "distance _bases":  [
+  "default_region": "FI",
+  "default_script": "Latn",
+  "distance_bases":  [
     "WALS",
     "SSWL",
     "PHOIBLE",
     "Ethnologue",
     "Glottolog"
    ],
-  "distance _source": "lang2vec / URIEL",
-  "distance _type": "fam",
+  "distance_source": "lang2vec / URIEL",
+  "distance_type": "fam",
   "fallback": "fin",
   "family": "Finnic",
   "glottocode": "finn1318",
   "glottolog": {
     "glottocode": "finn1318",
-    "iso639 _3": "fin",
+    "iso639_3": "fin",
     "family": "Finnic",
     "macroarea": "",
     "latitude": 62.0,
@@ -98,14 +100,14 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
     "status": ""
   },
   "id": "fin",
-  "iso639 _1": "fi",
-  "iso639 _2B": "fin",
-  "iso639 _2T": "fin",
-  "iso639 _3": "fin",
-  "iso639 _5": "",
-  "language _type": "L",
+  "iso639_1": "fi",
+  "iso639_2B": "fin",
+  "iso639_2T": "fin",
+  "iso639_3": "fin",
+  "iso639_5": "",
+  "language_type": "L",
   "name": "Finnish",
-  "nearest _languages":  [
+  "nearest_languages":  [
     {
       "lang": "est",
       "distance": 0.0003
@@ -115,11 +117,11 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
       "distance": 0.0003
     }
    ],
-  "official _name": "Finnish",
+  "official_name": "Finnish",
   "pos _stats": {},
   "uralicNLP": true,
   "written": true,
-  "written _scripts":  [
+  "written_scripts":  [
     "Latn"
    ]
 }
@@ -191,9 +193,9 @@ python3 -m glfm.run_full_pipeline --list
 
 Example:
 ```python
- [sources.iso _639 _3 ]
+ [sources.iso_639_3 ]
 
-url  = "https ://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
+url  = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
 
  [sources.cldr ]
 
@@ -205,9 +207,9 @@ endpoint  = "https ://query.wikidata.org/sparql"
 
  [paths ]
 
-data _dir  = ""        # empty  =  ~/.cache/glfm/data
+data_dir  = ""        # empty  =  ~/.cache/glfm/data
 
-cache _dir  = ""       # empty  =  ~/.cache/glfm
+cache_dir  = ""       # empty  =  ~/.cache/glfm
 ```
 ---
 

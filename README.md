@@ -268,10 +268,13 @@ for nb in fin ["nearest _languages" ] [:10 ]:
 
 ### Installation:
 ```bash
+pip install glfm
+```
+tai
+
+```bash
 git clone https ://codeberg.org/lahtis/GLFM.git
-
 cd GLFM
-
 pip install  -e ". [dev ]"
 ```
 ---

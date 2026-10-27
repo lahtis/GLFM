@@ -4,7 +4,7 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 
 - **Author:** Tuomas Lähteenmäki  
 - **License:** MIT  
-- **Version:** 1.0.4
+- **Version:** 1.0.5
 
 ---
 
@@ -215,49 +215,91 @@ cache_dir = ""       # empty  =  ~/.cache/glfm
 
 ## Quick Start
 
-### 1 . Download data
+### 1 . Install 
 ```bash
-python3 -m glfm.download
+pip install glfm
 ```
-Or generate data from sources:
+
+### 2. Get data
+Choose one of these:
+
+Option A: Download pre-built data (recommended)
 ```bash
-python3 -m glfm.run_full_pipeline  --only generate glottolog
+python3 -m glfm.download                    # consumer (558 kB)
+python3 -m glfm.download --tier research    # research (1.4 MB)
 ```
-### 2 . Run the full pipeline
+Option B: Generate data from sources (slow, requires network)
+```bash
+python3 -m glfm.run_full_pipeline --only generate glottolog
+```
+
+
+### 3 . Run the full pipeline
 ```bash
 python3 -m glfm.run_full_pipeline
 ```
-### 3 . Access data in Python
+### 4 . Access data in Python
 
 ```python
-import json
-
+import gzip, json
 from pathlib import Path
 
-unified  = Path("output/unified/unified_languages.json")
-with unified.open() as f:
-    languages  = json.load(f)
+cache = Path.home() / ".cache" / "glfm" / "data"
+with gzip.open(cache / "unified_languages.json.gz", "rt") as f:
+    languages = json.load(f)
 
-fin  = languages ["fin"]
-print(fin ["bcp47"])                # fi-Latn-FI
-print(fin ["family"])               # Finnic
-print(fin ["glottocode"])           # finn1318
-print(fin ["uralicNLP"])            # True
-print(fin ["nearest_languages"] [:5])   # Top 5 nearest languages
+fin = languages["fin"]
+print(fin["bcp47"])                  # fi-Latn-FI
+print(fin["family"])                 # Finnic
+print(fin["glottocode"])             # finn1318
+print(fin["nearest_languages"][:5])  # Top 5 nearest languages
 ```
 
 ### 4 . Consumer dataset (top-20 neighbors)
+```python
+import gzip
+import json
+from pathlib import Path
+
+# Option A: read from cache (after `glfm.download`)
+cache = Path.home() / ".cache" / "glfm" / "data"
+# Option B: read from pipeline output (after `glfm.run_full_pipeline`)
+# output = Path("output/unified")
+
+with gzip.open(cache / "languages_top20.json.gz", "rt") as f:
+    languages = json.load(f)
+
+fin = languages["fin"]
+print(f"bcp47: {fin['bcp47']}")           # fi-Latn-FI
+print(f"family: {fin['family']}")         # Finnic
+print(f"glottocode: {fin['glottocode']}") # finn1318
+print(f"language_type: {fin['language_type']}")  # L
+print(f"neighbors: {len(fin['nearest_languages'])}")  # 20
+
+for nb in fin["nearest_languages"]:
+    print(f"{nb['lang']}: {nb['distance']:.4f}")
+```
+
+### 5. Research dataset (up to 100 neighbors)
 
 ```python
 import gzip
 import json
+from pathlib import Path
 
-with gzip.open("output/unified/languages_top20.json.gz", "rt") as f:
-    languages  = json.load(f)
+# Option A: read from cache (after `glfm.download --tier research`)
+cache = Path.home() / ".cache" / "glfm" / "data"
+# Option B: read from pipeline output (after `glfm.run_full_pipeline`)
+# output = Path("output/unified")
 
-fin  = languages ["fin"]
-for nb in fin ["nearest_languages"] [:10]:
-    print(f"{nb ['lang']}: {nb ['distance']:.4f}")
+with gzip.open(cache / "unified_languages.json.gz", "rt") as f:
+    languages = json.load(f)
+
+fin = languages["fin"]
+print(f"neighbors: {len(fin['nearest_languages'])}")  # 100
+
+for nb in fin["nearest_languages"]:
+    print(f"{nb['lang']}: {nb['distance']:.4f}")
 ```
 
 ---
@@ -278,9 +320,9 @@ cd GLFM
 python3 -m venv venv
 source venv/bin/activate    # Linux/macOS
 # venv\Scripts\activate     # Windows
+```
 
 ### 2. Install package
-
 ```bash
 pip install glfm
 ```
@@ -288,7 +330,6 @@ pip install glfm
 ```bash
 pip install -e ".[dev]"
 ```
-
 or 
 
 ```bash

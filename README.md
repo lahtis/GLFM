@@ -268,16 +268,35 @@ for nb in fin ["nearest_languages"] [:10]:
 - **Core dependencies:** none (pure stdlib)  
 - **Dev dependencies:** `numpy`, `requests`, `msgpack`, `lang2vec`, `graphviz`, `pytest`
 
-### Installation:
-```bash
-pip install glfm
-```
-tai
+## Installation
+
+### 1. Create virtual environment
 
 ```bash
 git clone https://codeberg.org/lahtis/GLFM.git
 cd GLFM
-pip install -e ". [dev]"
+python3 -m venv venv
+source venv/bin/activate    # Linux/macOS
+# venv\Scripts\activate     # Windows
+
+### 2. Install package
+
+```bash
+pip install glfm
+```
+### 3. Install development dependencies (optional)
+```bash
+pip install -e ".[dev]"
+```
+
+or 
+
+```bash
+git clone https://codeberg.org/lahtis/GLFM.git
+cd GLFM
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
 ```
 ---
 

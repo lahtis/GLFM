@@ -58,13 +58,29 @@ def load_json(path: Path) -> dict:
 
 
 def save_json(path: Path, data: dict) -> None:
+    """Kirjoittaa sekä plain-JSON että gzip."""
+    import gzip
+
     path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Plain JSON (debug)
     tmp = path.with_suffix(path.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, path)
+
+    # Gzip JSON (tuotanto)
+    gz_path = path.with_suffix(path.suffix + ".gz")
+    tmp_gz = gz_path.with_suffix(gz_path.suffix + ".tmp")
+    with gzip.open(tmp_gz, "wt", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_gz, gz_path)
+
+    log.info("Kirjoitettu: %s ja %s", path, gz_path)
 
 
 def make_backup(path: Path) -> Optional[Path]:

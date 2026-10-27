@@ -8,20 +8,17 @@
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
 #
-# Lataa datapaketin (~/.cache/glfm/data/).
-# Käyttö:
-#     python3 -m glfm.download                    # consumer (558 kt)
+# Download a data package to ~/.cache/glfm/data/.
+# Usage:
+#     python3 -m glfm.download                    # consumer (558 kB)
 #     python3 -m glfm.download --tier research    # research (1.4 MB)
 #     python3 -m glfm.download --force
 #
 
 import argparse
-import gzip
 import hashlib
-import io
-import json
 import logging
-import shutil
+import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -30,42 +27,50 @@ log = logging.getLogger(__name__)
 
 TIERS = ("consumer", "research")
 
+# Filename for each tier (saved as-is, .gz)
+TIER_FILENAMES = {
+    "consumer": "languages_top20.json.gz",
+    "research": "unified_languages.json.gz",
+}
+
 
 def download_data(force: bool = False, tier: str = "consumer") -> Path:
     """
-    Lataa datapaketin cacheen (~/.cache/glfm/data/).
+    Download a data package to the cache (~/.cache/glfm/data/).
+
+    The file is saved as-is (.json.gz) — callers decompress it into
+    memory when needed.
 
     Args:
-        force: pakota uudelleenlataus
-        tier: "consumer" (558 kt) tai "research" (1.4 MB)
+        force: force re-download even if data exists
+        tier: "consumer" (558 kB) or "research" (1.4 MB)
 
     Returns:
-        Polku data-hakemistoon
+        Path to the data directory
     """
     from glfm.config import load_config
     from glfm.paths import get_cache_dir
 
     if tier not in TIERS:
-        raise ValueError(f"Tuntematon tier: {tier}. Valinnat: {TIERS}")
+        raise ValueError(f"Unknown tier: {tier}. Choices: {TIERS}")
 
     config = load_config()
     cache = get_cache_dir() / "data"
 
-    # Tarkista onko jo ladattu
+    # Check if already downloaded
     marker = cache / f".downloaded_{tier}"
     if cache.exists() and marker.exists() and not force:
-        log.info("Data (%s) jo olemassa: %s", tier, cache)
+        log.info("Data (%s) already exists: %s", tier, cache)
         return cache
 
-    # Hae tier-kohtainen config
+    # Get tier-specific config
     download_cfg = config["download"].get(tier)
     if not download_cfg:
         raise RuntimeError(
-            f"Config: download.{tier} puuttuu. "
-            f"Tarkista config.toml."
+            f"Config: download.{tier} missing. Check config.toml."
         )
 
-    # Kokeile ensisijaista URL:ia, sitten peilejä
+    # Try primary URL, then mirrors
     urls = [download_cfg["url"]]
     for name, url in download_cfg.get("mirrors", {}).items():
         if url != download_cfg["url"]:
@@ -76,78 +81,62 @@ def download_data(force: bool = False, tier: str = "consumer") -> Path:
 
     for url in urls:
         try:
-            log.info("Ladataan (%s): %s", tier, url)
+            log.info("Downloading (%s): %s", tier, url)
             with urllib.request.urlopen(
                 url, timeout=download_cfg["timeout"]
             ) as resp:
                 data = resp.read()
-            log.info("Ladattu (%s): %.1f kt", tier, len(data) / 1024)
+            log.info("Downloaded (%s): %.1f kB", tier, len(data) / 1024)
             break
         except Exception as e:
-            log.warning("Lataus epäonnistui (%s): %s", url, e)
+            log.warning("Download failed (%s): %s", url, e)
             last_error = e
             continue
 
     if data is None:
-        raise RuntimeError(f"Kaikki lataukset epäonnistuivat: {last_error}")
+        raise RuntimeError(f"All downloads failed: {last_error}")
 
-    # Tarkista hash
+    # Verify hash
     if sha256 := download_cfg.get("sha256"):
         h = hashlib.sha256(data).hexdigest()
         if h != sha256:
-            raise RuntimeError(f"SHA256 ei täsmää: {h} != {sha256}")
+            raise RuntimeError(f"SHA256 mismatch: {h} != {sha256}")
 
-    # Pura gzip → JSON
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    tmp = cache.parent / f"data_{tier}.tmp"
-    if tmp.exists():
-        shutil.rmtree(tmp)
-    tmp.mkdir()
+    # Save as-is (.json.gz) — do NOT extract, do NOT delete cache
+    cache.mkdir(parents=True, exist_ok=True)
 
-    try:
-        with gzip.open(io.BytesIO(data), "rt", encoding="utf-8") as gz:
-            parsed = json.load(gz)
-    except Exception as e:
-        shutil.rmtree(tmp, ignore_errors=True)
-        raise RuntimeError(f"Purku epäonnistui: {e}")
+    filename = TIER_FILENAMES[tier]
+    output = cache / filename
+    tmp = output.with_suffix(output.suffix + ".tmp")
+    with open(tmp, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(output)
 
-    # Tallenna purettu JSON
-    filename = (
-        "languages_top20.json" if tier == "consumer"
-        else "unified_languages.json"
-    )
-    output = tmp / filename
-    with open(output, "w", encoding="utf-8") as f:
-        json.dump(parsed, f, ensure_ascii=False)
+    # Mark as downloaded
+    marker.touch()
 
-    # Atominen uudelleennimeäminen
-    if cache.exists():
-        shutil.rmtree(cache)
-    tmp.rename(cache)
-
-    # Merkitse ladatuksi
-    (cache / f".downloaded_{tier}").touch()
-
-    log.info("Valmis (%s): %s (%d kieltä)", tier, cache, len(parsed))
+    log.info("Done (%s): %s (%.1f kB)", tier, output, len(data) / 1024)
     return cache
 
 
 def _data_size(path: Path) -> int:
-    """Palauttaa hakemiston koon tavuina."""
+    """Return the size of a directory in bytes."""
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Lataa GLFM-data (~/.cache/glfm/data/).",
+        description="Download GLFM data to ~/.cache/glfm/data/.",
     )
     parser.add_argument(
         "--tier", choices=TIERS, default="consumer",
-        help="Datapaketti: consumer (558 kt) tai research (1.4 MB)",
+        help="Data package: consumer (558 kB) or research (1.4 MB)",
     )
     parser.add_argument(
         "--force", action="store_true",
-        help="Pakota uudelleenlataus",
+        help="Force re-download",
     )
     args = parser.parse_args()
 
@@ -165,7 +154,7 @@ def main():
     size_kt = _data_size(path) / 1024
     print()
     print(f"Data ({args.tier}): {path}")
-    print(f"Koko: {size_kt:.1f} kt")
+    print(f"Size: {size_kt:.1f} kB")
     return 0
 
 

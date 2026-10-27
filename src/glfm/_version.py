@@ -14,5 +14,5 @@ __version__ = "1.0.5"
 __version_tuple__ = tuple(int(x) for x in __version__.split(".")[:3])
 
 # Valinnainen: git-commit, build-päivä (voi päivittää CI:ssä)
-__build_date__ = "2026-10-26"
+__build_date__ = "2026-10-27"
 __git_commit__ = "unknown"

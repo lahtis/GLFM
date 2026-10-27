@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.4
+# Version 1.0.5
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -16,7 +16,7 @@ import logging
 import os
 from pathlib import Path
 
-from glfm.paths import get_data_dir, get_output_dir
+from glfm._version import __version__
 
 log = logging.getLogger(__name__)
 
@@ -57,15 +57,48 @@ DEFAULT_CONFIG = {
         },
     },
     "download": {
-        "url": (
-            "https://codeberg.org/lahtis/GLFM/releases/download/"
-            "v1.0.4/data.zip"
-        ),
-        "sha256": "",
-        "timeout": 300,
+        "consumer": {
+            "url": (
+                "https://codeberg.org/lahtis/GLFM/releases/download/"
+                "v1.0.5/languages_top20.json.gz"
+            ),
+            "sha256": "",
+            "size_kt": 558,
+            "timeout": 300,
+            "mirrors": {
+                "codeberg": (
+                    "https://codeberg.org/lahtis/GLFM/releases/download/"
+                    "v1.0.5/languages_top20.json.gz"
+                ),
+                "github": (
+                    "https://github.com/lahtis/GLFM/releases/download/"
+                    "v1.0.5/languages_top20.json.gz"
+                ),
+            },
+        },
+        "research": {
+            "url": (
+                "https://codeberg.org/lahtis/GLFM/releases/download/"
+                "v1.0.5/unified_languages.json.gz"
+            ),
+            "sha256": "",
+            "size_mb": 1.4,
+            "timeout": 300,
+            "mirrors": {
+                "codeberg": (
+                    "https://codeberg.org/lahtis/GLFM/releases/download/"
+                    "v1.0.5/unified_languages.json.gz"
+                ),
+                "github": (
+                    "https://github.com/lahtis/GLFM/releases/download/"
+                    "v1.0.5/unified_languages.json.gz"
+                ),
+            },
+        },
     },
     "http": {
-        "user_agent": "glfm/1.0.4 (https://codeberg.org/lahtis/GLFM)",
+        # User-Agent rakennetaan versiosta – ei kovakoodata
+        "user_agent": f"glfm/{__version__} (https://codeberg.org/lahtis/GLFM)",
         "timeout": 60,
     },
     "paths": {
@@ -88,9 +121,12 @@ ENV_MAP = {
     "GLFM_CLDR_VERSION": ("sources", "cldr", "version"),
     "GLFM_CLDR_URL": ("sources", "cldr", "url"),
     "GLFM_WIKIDATA_ENDPOINT": ("sources", "wikidata", "endpoint"),
-    "GLFM_DATA_URL": ("download", "url"),
-    "GLFM_DATA_SHA256": ("download", "sha256"),
-    "GLFM_DATA_TIMEOUT": ("download", "timeout"),
+    "GLFM_CONSUMER_URL": ("download", "consumer", "url"),
+    "GLFM_CONSUMER_SHA256": ("download", "consumer", "sha256"),
+    "GLFM_CONSUMER_TIMEOUT": ("download", "consumer", "timeout"),
+    "GLFM_RESEARCH_URL": ("download", "research", "url"),
+    "GLFM_RESEARCH_SHA256": ("download", "research", "sha256"),
+    "GLFM_RESEARCH_TIMEOUT": ("download", "research", "timeout"),
     "GLFM_USER_AGENT": ("http", "user_agent"),
     "GLFM_HTTP_TIMEOUT": ("http", "timeout"),
     "GLFM_CACHE_DIR": ("paths", "cache_dir"),

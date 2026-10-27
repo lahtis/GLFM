@@ -261,11 +261,7 @@ import gzip
 import json
 from pathlib import Path
 
-# Option A: read from cache (after `glfm.download`)
 cache = Path.home() / ".cache" / "glfm" / "data"
-# Option B: read from pipeline output (after `glfm.run_full_pipeline`)
-# output = Path("output/unified")
-
 with gzip.open(cache / "languages_top20.json.gz", "rt") as f:
     languages = json.load(f)
 

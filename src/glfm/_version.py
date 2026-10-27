@@ -10,7 +10,7 @@ Versio noudattaa PEP 440 -standardia:
     MAJOR.MINOR.PATCH[.devN | .aN | .bN | .rcN]
 """
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 __version_tuple__ = tuple(int(x) for x in __version__.split(".")[:3])
 
 # Valinnainen: git-commit, build-päivä (voi päivittää CI:ssä)

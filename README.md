@@ -4,7 +4,7 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 
 - **Author:** Tuomas Lähteenmäki  
 - **License:** MIT  
-- **Version:** 1.0.5
+- **Version:** 1.0.6
 
 ---
 

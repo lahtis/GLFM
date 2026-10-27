@@ -19,7 +19,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from glfm.paths import get_data_dir, get_output_dir
+from glfm.paths import get_data_dir
 from typing import Any, Dict
 
 log = logging.getLogger(__name__)

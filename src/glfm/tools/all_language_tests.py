@@ -15,15 +15,15 @@ import logging
 from collections import Counter
 from pathlib import Path
 
-from glfm.paths import get_data_dir, get_output_dir
+from glfm.paths import get_data_dir
 
 log = logging.getLogger(__name__)
 
 # --- Tiedostopolut ---
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-INPUT_FILE = get_output_dir() / "unified" / "unified_languages.json"
-OUTPUT_LANG_LIST = get_output_dir() / "unified" / "all_languages_list.json"
-OUTPUT_ERRORS = get_output_dir() / "unified" / "validation_errors.json"
+INPUT_FILE = get_data_dir() / "unified" / "unified_languages.json"
+OUTPUT_LANG_LIST = get_data_dir() / "unified" / "all_languages_list.json"
+OUTPUT_ERRORS = get_data_dir() / "unified" / "validation_errors.json"
 
 
 def validate(unified: dict) -> tuple[list[dict], list[dict]]:

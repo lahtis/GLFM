@@ -19,12 +19,12 @@ import os
 import pickle
 from pathlib import Path
 
-from glfm.paths import get_data_dir, get_output_dir
+from glfm.paths import get_data_dir
 
 log = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_INPUT = get_output_dir() / "unified" / "languages_top20.json"
+DEFAULT_INPUT = get_data_dir() / "unified" / "languages_top20.json"
 
 
 def _atomic_write(path: Path, write_fn) -> None:

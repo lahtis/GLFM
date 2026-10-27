@@ -21,7 +21,7 @@ import logging
 import os
 from pathlib import Path
 
-from glfm.paths import get_data_dir, get_output_dir
+from glfm.paths import get_data_dir
 
 log = logging.getLogger(__name__)
 

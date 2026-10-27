@@ -19,13 +19,13 @@ import sys
 import time
 from pathlib import Path
 
-from glfm.paths import get_data_dir, get_output_dir
+from glfm.paths import get_data_dir
 
 log = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TOOLS = PROJECT_ROOT / "tools"
-OUTPUT = get_output_dir()
+OUTPUT = get_data_dir()
 
 # (avain, otsikko, skripti, timeout)
 STEPS = [

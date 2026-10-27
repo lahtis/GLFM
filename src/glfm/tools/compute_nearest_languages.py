@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.4
+# Version 1.0.5
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import logging
 import os
@@ -21,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Varmista että src/ on sys.path:ssä
+# Ensure src/ is on sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(PROJECT_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -29,15 +30,15 @@ if str(PROJECT_ROOT / "src") not in sys.path:
 import lang2vec.lang2vec as l2v
 import numpy as np
 
-from glfm.paths import get_output_dir
+from glfm.paths import get_data_dir
 
 log = logging.getLogger("compute_nearest_languages")
 
-# --- Polut (glfm.paths:stä) ---
-OUTPUT_ROOT = get_output_dir()
-DEFAULT_FILE = OUTPUT_ROOT / "unified" / "unified_languages.json"
-BACKUP_DIR = OUTPUT_ROOT / "unified" / "backups"
-CHECKPOINT_PATH = OUTPUT_ROOT / "unified" / "nearest_languages.checkpoint.json"
+# --- Paths (all data goes to cache) ---
+OUTPUT_ROOT = get_data_dir()
+DEFAULT_FILE = OUTPUT_ROOT / "unified_languages.json"
+BACKUP_DIR = OUTPUT_ROOT / "backups"
+CHECKPOINT_PATH = OUTPUT_ROOT / "nearest_languages.checkpoint.json"
 CHECKPOINT_INTERVAL = 1000
 
 MAX_NEIGHBORS = 100
@@ -49,7 +50,7 @@ DISTANCE_BASES = ["WALS", "SSWL", "PHOIBLE", "Ethnologue", "Glottolog"]
 try:
     from glfm._version import __version__ as GLFM_VERSION
 except ImportError:
-    GLFM_VERSION = "1.0.4"
+    GLFM_VERSION = "1.0.5"
 
 
 def load_json(path: Path) -> dict:
@@ -58,9 +59,7 @@ def load_json(path: Path) -> dict:
 
 
 def save_json(path: Path, data: dict) -> None:
-    """Kirjoittaa sekä plain-JSON että gzip."""
-    import gzip
-
+    """Write both plain JSON and gzip JSON."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Plain JSON (debug)
@@ -71,7 +70,7 @@ def save_json(path: Path, data: dict) -> None:
         os.fsync(f.fileno())
     os.replace(tmp, path)
 
-    # Gzip JSON (tuotanto)
+    # Gzip JSON (production)
     gz_path = path.with_suffix(path.suffix + ".gz")
     tmp_gz = gz_path.with_suffix(gz_path.suffix + ".tmp")
     with gzip.open(tmp_gz, "wt", encoding="utf-8") as f:
@@ -80,7 +79,7 @@ def save_json(path: Path, data: dict) -> None:
         os.fsync(f.fileno())
     os.replace(tmp_gz, gz_path)
 
-    log.info("Kirjoitettu: %s ja %s", path, gz_path)
+    log.info("Written: %s and %s", path, gz_path)
 
 
 def make_backup(path: Path) -> Optional[Path]:
@@ -325,15 +324,15 @@ def main():
     parser.add_argument("--input", type=Path, default=DEFAULT_FILE)
     parser.add_argument(
         "--output", type=Path, default=None,
-        help="Oletus: ylikirjoittaa --input (backup tehdään ensin)",
+        help="Default: overwrite --input (backup made first)",
     )
     parser.add_argument(
         "--no-backup", action="store_true",
-        help="Ohita backup ennen ylikirjoitusta",
+        help="Skip backup before overwrite",
     )
     parser.add_argument(
         "--max-neighbors", type=int, default=MAX_NEIGHBORS,
-        help=f"Naapureiden enimmäismäärä per kieli (oletus: {MAX_NEIGHBORS})",
+        help=f"Maximum number of neighbors per language (default: {MAX_NEIGHBORS})",
     )
     args = parser.parse_args()
 

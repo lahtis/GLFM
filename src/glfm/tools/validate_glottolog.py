@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.0.5
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -15,13 +15,17 @@ import logging
 import sys
 from pathlib import Path
 
-from glfm.paths import get_data_dir, get_output_dir
+# Ensure src/ is on sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+if str(PROJECT_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from glfm.paths import get_data_dir
 
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_INPUT = get_output_dir() / "unified" / "unified_languages.json"
-DEFAULT_ERRORS = get_output_dir() / "validation" / "glottolog_errors.json"
+DEFAULT_INPUT = get_data_dir() / "unified_languages.json"
+DEFAULT_ERRORS = get_data_dir() / "validation" / "glottolog_errors.json"
 
 VALID_MACROAREAS = {
     "Africa", "Eurasia", "Australia", "Papunesia",
@@ -44,12 +48,12 @@ def validate_glottolog(data: dict) -> list[str]:
         lon = gl.get("longitude")
         if lat is not None:
             if not isinstance(lat, (int, float)):
-                errors.append(f"{lang_id}: latitude ei ole numero ({type(lat).__name__})")
+                errors.append(f"{lang_id}: latitude is not a number ({type(lat).__name__})")
             elif not (-90 <= lat <= 90):
                 errors.append(f"{lang_id}: latitude out of range ({lat})")
         if lon is not None:
             if not isinstance(lon, (int, float)):
-                errors.append(f"{lang_id}: longitude ei ole numero ({type(lon).__name__})")
+                errors.append(f"{lang_id}: longitude is not a number ({type(lon).__name__})")
             elif not (-180 <= lon <= 180):
                 errors.append(f"{lang_id}: longitude out of range ({lon})")
         lineage = gl.get("lineage")
@@ -66,7 +70,7 @@ def validate_glottolog(data: dict) -> list[str]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Validoi Glottolog-metadata unified_languages.json:sta.",
+        description="Validate Glottolog metadata in unified_languages.json.",
     )
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--errors", type=Path, default=DEFAULT_ERRORS)
@@ -75,16 +79,16 @@ def main():
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s %(message)s",
-        stream=sys.stdout,   # ← INFO stdoutiin
+        stream=sys.stdout,
     )
 
     if not args.input.exists():
         raise SystemExit(
-            f"Syöte puuttuu: {args.input}\n"
-            f"Aja ensin: python3 build_unified.py"
+            f"Input missing: {args.input}\n"
+            f"Run first: python3 -m glfm.build_unified"
         )
 
-    log.info("Luetaan: %s", args.input)
+    log.info("Reading: %s", args.input)
     with open(args.input, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -98,7 +102,7 @@ def main():
         for e in errors[:10]:
             print("  ", e)
         if len(errors) > 10:
-            print(f"  ... ja {len(errors) - 10} muuta")
+            print(f"  ... and {len(errors) - 10} more")
         return 1
 
     print("Glottolog validation OK")

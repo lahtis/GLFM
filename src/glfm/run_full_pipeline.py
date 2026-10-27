@@ -15,9 +15,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Ensure src/ is on sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-OUTPUT = PROJECT_ROOT / "output"
-LOG_DIR = OUTPUT / "logs"
+if str(PROJECT_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from glfm.paths import get_data_dir
+
+OUTPUT_ROOT = get_data_dir()
+LOG_DIR = OUTPUT_ROOT / "logs"
 
 
 # --- Step definitions -------------------------------------------------------
@@ -50,13 +56,11 @@ STEPS = [
      "glfm.tools.visualize_fallbacks", "optional"),
 ]
 
-# Module-specific arguments
 MODULE_ARGS = {
     "glfm.download": ["--tier", "consumer"],
     "glfm.tools.build_consumer_dataset": ["-k", "20"],
 }
 
-# Timeouts in seconds. None = no timeout
 TIMEOUTS = {
     "download": 300,
     "compute": None,
@@ -91,12 +95,7 @@ def setup_logging():
     return log_path
 
 
-def run_step(
-    title: str,
-    module: str,
-    timeout: int | None,
-    extra_args: list[str] | None = None,
-) -> bool:
+def run_step(title: str, module: str, timeout: int | None, extra_args: list[str] | None = None) -> bool:
     print(f"\n=== {title} ===")
     print(f"Module: {module}")
     if extra_args:
@@ -202,7 +201,6 @@ Examples:
     for key, title, module, kind in steps:
         timeout = TIMEOUTS.get(key, DEFAULT_TIMEOUT)
 
-        # Tier-specific arguments for the download step
         extra_args = list(MODULE_ARGS.get(module, []))
         if module == "glfm.download" and args.tier != "consumer":
             extra_args = ["--tier", args.tier]
@@ -225,7 +223,7 @@ Examples:
         print(" FULL PIPELINE COMPLETED SUCCESSFULLY")
         if skipped:
             print(f" (optional steps skipped: {', '.join(k for k, _ in skipped)})")
-        print(" Reports in output/validation/")
+        print(" Reports in ~/.cache/glfm/data/validation/")
     else:
         print(" PIPELINE COMPLETED WITH ERRORS")
         for key, reason in failed:

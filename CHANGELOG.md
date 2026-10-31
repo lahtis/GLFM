@@ -193,6 +193,13 @@ includes a 6-decimal distance field.
 - **`CheckpointManager`** now stores `distance_type` and `glfm_version`,
   so checkpoints are invalidated when either changes.
 
+### Known issues
+
+- **`glfm.download` may return 404** in the PyPI version (v1.0.7) because
+  the bundled `config.toml` uses `v1.0.7` (no dot) while the release tag
+  is `v.1.0.7` (with dot). Workaround: create `~/.config/glfm/config.toml`
+  with the correct URLs (see README).
+
 ---
 
 ## [1.0.6] — (unreleased)

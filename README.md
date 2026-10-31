@@ -250,6 +250,17 @@ cache_dir = ""       # empty  =  ~/.cache/glfm
 pip install glfm
 ```
 
+> **Note:** If `glfm.download` returns 404, your installed `config.toml`
+> may have the wrong tag. Create `~/.config/glfm/config.toml` with:
+>
+> ```toml
+> [download.consumer]
+> url = "https://codeberg.org/lahtis/GLFM/releases/download/v.1.0.7/languages_top20.json.gz"
+>
+> [download.research]
+> url = "https://codeberg.org/lahtis/GLFM/releases/download/v.1.0.7/unified_languages.json.gz"
+> ```
+
 ### 2. Get data
 Choose one of these:
 

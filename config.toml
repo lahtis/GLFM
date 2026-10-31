@@ -35,25 +35,23 @@ timeout = 3600
 
 [download.consumer]
 # Consumer data: 6554 languages, top-20 neighbors
-url = "https://codeberg.org/lahtis/GLFM/releases/download/v1.0.7/languages_top20.json.gz"
+url = "https://codeberg.org/lahtis/GLFM/releases/download/v.1.0.7/languages_top20.json.gz"
 sha256 = ""
 size_kt = 558
 timeout = 300
 
 [download.consumer.mirrors]
-codeberg = "https://codeberg.org/lahtis/GLFM/releases/download/v1.0.7/languages_top20.json.gz"
-github = "https://github.com/lahtis/GLFM/releases/download/v1.0.7/languages_top20.json.gz"
+github = "https://github.com/lahtis/GLFM/releases/download/v.1.0.7/languages_top20.json.gz"
 
 [download.research]
 # Research data: 7928 languages, up to 100 neighbors
-url = "https://codeberg.org/lahtis/GLFM/releases/download/v1.0.7/unified_languages.json.gz"
+url = "https://codeberg.org/lahtis/GLFM/releases/download/v.1.0.7/unified_languages.json.gz"
 sha256 = ""
 size_mb = 1.4
 timeout = 300
 
 [download.research.mirrors]
-codeberg = "https://codeberg.org/lahtis/GLFM/releases/download/v1.0.7/unified_languages.json.gz"
-github = "https://github.com/lahtis/GLFM/releases/download/v1.0.7/unified_languages.json.gz"
+github = "https://github.com/lahtis/GLFM/releases/download/v.1.0.7/unified_languages.json.gz"
 
 [nearest]
 # Distance computation settings

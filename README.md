@@ -6,12 +6,15 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 - **License:** MIT  
 - **Version:** 1.0.7
 
+> **Beta:** GLFM is in beta. The data format and config structure may change before 1.0.0 stable. See [CHANGELOG.md](CHANGELOG.md) for details.
+
 ---
 
 [![PyPI](https://img.shields.io/pypi/v/glfm)](https://pypi.org/project/glfm/)
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue) 
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green) 
 ![Status](https://img.shields.io/badge/Status-Active-success)
+![Status](https://img.shields.io/badge/Status-Beta-yellow)
 [![Downloads](https://static.pepy.tech/badge/glfm)](https://pepy.tech/project/glfm)
 
 ---

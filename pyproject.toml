@@ -1,22 +1,25 @@
 [build-system]
-requires = ["setuptools>=69.0.0", "wheel"]
+requires = ["setuptools>=70.1.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "glfm"
 dynamic = ["version"]
-description = "A comprehensive JSON database mapping over 7,700 languages (ISO 639-3) to language families (ISO 639-5) for RSS tools and localization workflows."
+description = "A comprehensive JSON database of 7,900+ languages (ISO 639-3) with nearest-language data, BCP-47 tags, fallback chains, and optional POS statistics for RSS, localization, and NLP workflows."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [
     { name = "Tuomas Lähteenmäki" }
 ]
-keywords = ["python", "linux", "localization", "iso639-3", "bcp47", "language-mapping", "nlp"]
+keywords = [
+    "python", "linux", "localization", "iso639-3", "bcp47",
+    "language-mapping", "nlp", "glottolog", "uriel", "lang2vec",
+    "pos-stats", "wiktextract"
+]
 classifiers = [
+    "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -40,16 +43,16 @@ dev = [
 Homepage = "https://codeberg.org/lahtis/GLFM"
 Repository = "https://codeberg.org/lahtis/GLFM"
 
-# --- Versio luetaan _version.py:stä ---
+# --- Version read from _version.py ---
 [tool.setuptools.dynamic]
 version = { attr = "glfm._version.__version__" }
 
-# --- Paketit src/-hakemistosta ---
+# --- Packages from src/ ---
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["glfm*"]
 exclude = ["tests*"]
 
-# --- Sisäinen data (override_scripts, uralic_languages) ---
+# --- Internal data (override_scripts, uralic_languages) ---
 [tool.setuptools.package-data]
 glfm = ["data/*.json"]

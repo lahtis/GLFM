@@ -31,6 +31,10 @@ OUTPUT_ROOT = get_data_dir()
 DEFAULT_TOP_K = 20
 DEFAULT_INPUT = OUTPUT_ROOT / "unified_languages.json"
 
+# Naapurikenttien järjestys tarkemmasta karkeampaan. Jos distance_6 puuttuu
+# (esim. vanha tietokanta), pudotaan distance-kenttään.
+DISTANCE_KEYS = ("distance_6", "distance")
+
 
 def is_living_written_language(lang_data: dict) -> bool:
     if not lang_data.get("written", False):
@@ -41,17 +45,25 @@ def is_living_written_language(lang_data: dict) -> bool:
     return True
 
 
+def _neighbor_distance(n: dict, default: float = 1.0) -> float:
+    for key in DISTANCE_KEYS:
+        if key in n and n[key] is not None:
+            return n[key]
+    return default
+
+
 def filter_neighbors(lang_code, lang_data, full_data, top_k, living_cache):
     raw_neighbors = lang_data.get("nearest_languages", [])
     clean = []
     for n in raw_neighbors:
         target = n.get("lang")
-        dist = n.get("distance", 1.0)
         if not target or target == lang_code:
             continue
         if not living_cache.get(target, False):
             continue
-        clean.append({"lang": target, "distance": dist})
+        # Kopioi kaikki kentät (mukaan lukien distance ja distance_6),
+        # jotta tarkkuus säilyy myös consumer-tasolla.
+        clean.append(dict(n))
         if len(clean) >= top_k:
             break
     return clean

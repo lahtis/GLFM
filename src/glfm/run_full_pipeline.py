@@ -3,7 +3,7 @@
 #
 # Global Language Family Mapper (GLFM)
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.5
+# Version 1.0.7
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -27,9 +27,11 @@ LOG_DIR = OUTPUT_ROOT / "logs"
 
 
 # --- Step definitions -------------------------------------------------------
+# Note: `download` and `pos_stats` are NOT part of the default pipeline.
+#   - `download` is unnecessary because the pipeline builds the data itself.
+#     Use separately: python3 -m glfm.download --tier consumer
+#   - `pos_stats` requires 5-10 GB of raw data. Use --with-pos.
 STEPS = [
-    ("download",  "Download data (consumer)",
-     "glfm.download", "producer"),
     ("generate",  "Generate ISO files",
      "glfm.tools.generate_iso_files", "producer"),
     ("glottolog", "Build Glottolog JSON",
@@ -56,18 +58,25 @@ STEPS = [
      "glfm.tools.visualize_fallbacks", "optional"),
 ]
 
+# Step added only with --with-pos
+POS_STEP = (
+    "pos_stats",
+    "Compute POS statistics (optional, requires 5-10 GB raw data)",
+    "glfm.tools.compute_pos_stats",
+    "optional",
+)
+
 MODULE_ARGS = {
-    "glfm.download": ["--tier", "consumer"],
     "glfm.tools.build_consumer_dataset": ["-k", "20"],
 }
 
 TIMEOUTS = {
-    "download": 300,
-    "compute": None,
+    "compute": None,      # no timeout (heavy)
     "build": 600,
     "generate": 300,
     "glottolog": 300,
     "consumer": 300,
+    "pos_stats": None,    # POS computation may take a long time
 }
 DEFAULT_TIMEOUT = 300
 
@@ -95,7 +104,8 @@ def setup_logging():
     return log_path
 
 
-def run_step(title: str, module: str, timeout: int | None, extra_args: list[str] | None = None) -> bool:
+def run_step(title: str, module: str, timeout: int | None,
+             extra_args: list[str] | None = None) -> bool:
     print(f"\n=== {title} ===")
     print(f"Module: {module}")
     if extra_args:
@@ -135,75 +145,113 @@ def run_step(title: str, module: str, timeout: int | None, extra_args: list[str]
     return True
 
 
+def build_epilog() -> str:
+    """Build --help text dynamically from STEPS."""
+    lines: list[str] = []
+
+    lines.append("Available steps for --only / --skip:")
+    for key, title, module, kind in STEPS:
+        lines.append(f"  {key:12s} {title}")
+    lines.append(f"  {POS_STEP[0]:12s} {POS_STEP[1]}")
+    lines.append("")
+
+    lines.append("Step types:")
+    lines.append("  [required]   producer step – pipeline stops on failure")
+    lines.append("  [validator]  validator step – recorded on failure, pipeline continues")
+    lines.append("  [optional]   optional step – skipped on failure, pipeline continues")
+    lines.append("")
+
+    lines.append("Examples:")
+    lines.append("  python3 -m glfm.run_full_pipeline")
+    lines.append("  python3 -m glfm.run_full_pipeline --with-pos")
+    lines.append("  python3 -m glfm.run_full_pipeline --skip compute")
+    lines.append("  python3 -m glfm.run_full_pipeline --only build compute consumer")
+    lines.append("  python3 -m glfm.run_full_pipeline --list")
+    lines.append("  python3 -m glfm.run_full_pipeline --list --with-pos")
+    lines.append("")
+
+    lines.append("Notes:")
+    lines.append("  - `download` is NOT part of the pipeline.")
+    lines.append("    Use `python3 -m glfm.download --tier consumer|research` separately.")
+    lines.append("  - `pos_stats` requires 5-10 GB of raw Wiktextract data (--with-pos).")
+    lines.append("    Download it first with: python3 -m glfm.tools.download_wiktextract")
+    lines.append("  - Without POS data, `pos_stats` is an empty {} for each language.")
+
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="GLFM full pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python3 -m glfm.run_full_pipeline                      # all steps
-  python3 -m glfm.run_full_pipeline --tier research      # research data
-  python3 -m glfm.run_full_pipeline --skip download      # skip data download
-  python3 -m glfm.run_full_pipeline --skip compute       # skip heavy computation
-  python3 -m glfm.run_full_pipeline --only build bcp47   # run only selected steps
-  python3 -m glfm.run_full_pipeline --list               # list steps
-""",
-    )
-    parser.add_argument(
-        "--tier",
-        choices=["consumer", "research"],
-        default="consumer",
-        help="Data package: consumer (558 kB) or research (1.4 MB)",
+        epilog=build_epilog(),
     )
     parser.add_argument(
         "--skip", nargs="*", default=[], metavar="KEY",
-        help="Skip these steps",
+        help="Skip these steps (see available keys below)",
     )
     parser.add_argument(
         "--only", nargs="*", default=[], metavar="KEY",
-        help="Run only these steps",
+        help="Run only these steps (see available keys below)",
+    )
+    parser.add_argument(
+        "--with-pos",
+        action="store_true",
+        help=(
+            "Include POS statistics (requires 5-10 GB raw Wiktextract data). "
+            "Download it first with: python3 -m glfm.tools.download_wiktextract"
+        ),
     )
     parser.add_argument(
         "--list", action="store_true",
-        help="List steps and exit",
+        help="List all available steps and exit (use --with-pos to include pos_stats)",
     )
     args = parser.parse_args()
 
+    # Build the list of steps to run
+    all_steps = list(STEPS)
+    if args.with_pos:
+        # Insert POS computation before validation
+        insert_at = next(
+            (i for i, s in enumerate(all_steps) if s[0] == "bcp47"),
+            len(all_steps),
+        )
+        all_steps.insert(insert_at, POS_STEP)
+
     if args.list:
-        for key, title, module, kind in STEPS:
+        for key, title, module, kind in all_steps:
             marker = {
                 "producer": "[required]",
                 "validator": "[validator]",
                 "optional":  "[optional]",
             }[kind]
-            print(f"  {key:10s} {title:35s} {marker}")
+            print(f"  {key:12s} {title:55s} {marker}")
         return
 
     if args.only:
-        steps = [s for s in STEPS if s[0] in args.only]
+        steps = [s for s in all_steps if s[0] in args.only]
         if not steps:
             print(f"[ERROR] --only did not match any keys: {args.only}")
+            print(f"        Available keys: {', '.join(s[0] for s in all_steps)}")
             sys.exit(1)
     else:
-        steps = [s for s in STEPS if s[0] not in args.skip]
+        steps = [s for s in all_steps if s[0] not in args.skip]
 
     log_path = setup_logging()
     print("========================================")
     print(" FULL PIPELINE EXECUTION")
     print("========================================")
     print(f"Log: {log_path}")
-    print(f"Tier: {args.tier}")
     print(f"Steps: {', '.join(s[0] for s in steps)}")
+    if args.with_pos:
+        print("POS statistics: enabled (--with-pos)")
 
     failed = []
     skipped = []
 
     for key, title, module, kind in steps:
         timeout = TIMEOUTS.get(key, DEFAULT_TIMEOUT)
-
         extra_args = list(MODULE_ARGS.get(module, []))
-        if module == "glfm.download" and args.tier != "consumer":
-            extra_args = ["--tier", args.tier]
 
         ok = run_step(title, module, timeout, extra_args)
 

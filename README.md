@@ -358,7 +358,7 @@ Without POS data, pos_stats is an empty {} for each language.
 
 ## Requirements
 
-- **Python 3.9+**  
+- **Python 3.11+**  
 - **Core dependencies:** none (pure stdlib)  
 - **Dev dependencies:** `numpy`, `requests`, `msgpack`, `lang2vec`, `graphviz`, `pytest`
 
@@ -485,7 +485,7 @@ MIT License. See LICENSE for details.
 
 |  # | Section | Change |
 | :---- | :---- | :---- |
-| 1 | Python version | `3.8+` → **`3.9+`** |
+| 1 | Python version | `3.8+` → **`3.11+`** |
 | 2 | Directory Structure | **`src/glfm/` layout** |
 | 3 | Data Structure | **`family: "Finnic"`**, `glottocode: "finn1318"`, `language_type: "L"` |
 | 4 | `nearest_languages` | 5 → **20 (consumer) / 100 (research)** |

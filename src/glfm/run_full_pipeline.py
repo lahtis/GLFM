@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.1.0
+# Version 1.1.1
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -23,10 +23,11 @@ log = logging.getLogger(__name__)
 
 
 # --- Step definitions -------------------------------------------------------
-# Note: `download` and `pos_stats` are NOT part of the default pipeline.
+# Note: `download` is NOT part of the default pipeline.
 #   - `download` is unnecessary because the pipeline builds the data itself.
 #     Use separately: python3 -m glfm.download --tier consumer
-#   - `pos_stats` requires ~3 GB of raw data. Use --with-pos.
+#   - `pos_stats` requires ~3 GB of raw data. Use --with-pos, which will
+#     download the Wiktextract dump automatically if it is missing.
 STEPS = [
     ("generate",  "Generate ISO files",
      "glfm.tools.generate_iso_files", "producer"),
@@ -62,6 +63,11 @@ POS_STEP = (
     "optional",
 )
 
+# Module used to download the Wiktextract dump (only if --with-pos and
+# the file is missing).
+WIKTEXTTRACT_DOWNLOAD_MODULE = "glfm.tools.download_wiktextract"
+WIKTEXTTRACT_FILENAME = "raw-wiktextract-data.jsonl.gz"
+
 MODULE_ARGS = {
     "glfm.tools.build_consumer_dataset": ["-k", "20"],
 }
@@ -73,6 +79,7 @@ TIMEOUTS = {
     "glottolog": 300,
     "consumer": 300,
     "pos_stats": None,    # POS computation may take a long time
+    "wiktextract": 3600,  # download may take a long time
 }
 DEFAULT_TIMEOUT = 300
 
@@ -172,13 +179,19 @@ def build_epilog() -> str:
 
     lines.append("Examples:")
     lines.append("  python3 -m glfm.run_full_pipeline")
-    lines.append("  python3 -m glfm.run_full_pipeline --with-pos")
-    lines.append("  python3 -m glfm.run_full_pipeline --skip compute")
+    lines.append(
+        "  python3 -m glfm.run_full_pipeline --with-pos"
+    )
+    lines.append(
+        "  python3 -m glfm.run_full_pipeline --skip compute"
+    )
     lines.append(
         "  python3 -m glfm.run_full_pipeline --only build compute consumer"
     )
     lines.append("  python3 -m glfm.run_full_pipeline --list")
-    lines.append("  python3 -m glfm.run_full_pipeline --list --with-pos")
+    lines.append(
+        "  python3 -m glfm.run_full_pipeline --list --with-pos"
+    )
     lines.append("")
 
     lines.append("Notes:")
@@ -188,18 +201,48 @@ def build_epilog() -> str:
         "separately."
     )
     lines.append(
-        "  - `pos_stats` requires ~3 GB of raw Wiktextract data "
-        "(--with-pos)."
+        "  - `pos_stats` requires ~3 GB of raw Wiktextract data. "
+        "With --with-pos, the data is downloaded automatically "
+        "if missing."
     )
     lines.append(
-        "    Download it first with: "
-        "python3 -m glfm.tools.download_wiktextract"
-    )
-    lines.append(
-        "  - Without POS data, `pos_stats` is an empty {} for each language."
+        "  - Without POS data, `pos_stats` is an empty {} for each "
+        "language."
     )
 
     return "\n".join(lines)
+
+
+def ensure_wiktextract_data(data_root: Path) -> bool:
+    """Download the Wiktextract dump if it is missing.
+
+    Returns True if the data is available (already present or
+    successfully downloaded), False otherwise.
+    """
+    path = data_root / WIKTEXTTRACT_FILENAME
+    if path.exists():
+        log.info(
+            "Wiktextract data already present: %s (%.1f GB)",
+            path, path.stat().st_size / 1e9,
+        )
+        return True
+
+    print(
+        f"\n[INFO] Wiktextract data missing ({path}). "
+        f"Downloading (~3 GB)..."
+    )
+    ok = run_step(
+        "Download Wiktextract dump",
+        WIKTEXTTRACT_DOWNLOAD_MODULE,
+        TIMEOUTS["wiktextract"],
+    )
+    if not ok:
+        print(
+            "\n[WARN] Could not download Wiktextract data. "
+            "Skipping pos_stats."
+        )
+        return False
+    return True
 
 
 def main() -> int:
@@ -221,8 +264,7 @@ def main() -> int:
         action="store_true",
         help=(
             "Include POS statistics (requires ~3 GB raw Wiktextract "
-            "data). Download it first with: "
-            "python3 -m glfm.tools.download_wiktextract"
+            "data). The data is downloaded automatically if missing."
         ),
     )
     parser.add_argument(
@@ -287,6 +329,14 @@ def main() -> int:
     print(f"Steps: {', '.join(s[0] for s in steps)}")
     if args.with_pos:
         print("POS statistics: enabled (--with-pos)")
+
+    # If --with-pos is given and pos_stats is in the step list,
+    # ensure the Wiktextract dump is present. Download it if missing.
+    if args.with_pos and any(s[0] == "pos_stats" for s in steps):
+        if not ensure_wiktextract_data(output_root):
+            # Drop pos_stats from the step list, keep going.
+            steps = [s for s in steps if s[0] != "pos_stats"]
+            print("[INFO] pos_stats removed from this run.")
 
     failed = []
     skipped = []

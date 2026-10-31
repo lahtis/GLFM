@@ -3,12 +3,12 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
 #
-# Parsii ISO 639-2 -lähdetiedoston (iso-639-2.txt) JSON-muotoon.
+# Parse the ISO 639-2 source file (iso-639-2.txt) to JSON.
 #
 
 import argparse
@@ -17,92 +17,128 @@ import logging
 import os
 from pathlib import Path
 
+from glfm.errors import OperationalError
 from glfm.paths import get_data_dir
 
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = get_data_dir()
-DEFAULT_SRC = DATA_ROOT / "iso-639-2.txt"
-DEFAULT_OUT = DATA_ROOT / "iso_639_2.json"
+
+def _atomic_write_json(path: Path, data: dict) -> None:
+    """Atomic JSON write."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(
+                data, f,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(path)
+    except OSError as e:
+        raise OperationalError(
+            f"Could not write {path}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
 
 
 def parse_iso_639_2(src: Path) -> dict:
-    """
-    Parsii ISO 639-2 -lähdetiedoston.
+    """Parse the ISO 639-2 source file.
 
-    Rivimuoto: bcode|tcode|iso1|en_name|fr_name
-    Palauttaa dictin avaimena 3-kirjaiminen koodi (T jos on, muuten B).
+    Line format: bcode|tcode|iso1|en_name|fr_name
+    Returns a dict keyed by 3-letter code (T if present, otherwise B).
     """
     result: dict = {}
     skipped = 0
 
-    with open(src, "r", encoding="utf-8") as f:
-        for lineno, line in enumerate(f, 1):
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
+    try:
+        with open(src, "r", encoding="utf-8") as f:
+            for lineno, line in enumerate(f, 1):
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
 
-            parts = line.split("|")
-            if len(parts) < 5:
-                log.debug("Ohitetaan rivi %d: liian vähän kenttiä", lineno)
-                skipped += 1
-                continue
+                parts = line.split("|")
+                if len(parts) < 5:
+                    log.debug(
+                        "Skipping line %d: too few fields", lineno
+                    )
+                    skipped += 1
+                    continue
 
-            bcode, tcode, iso1, en_name, _fr_name = [p.strip() for p in parts[:5]]
+                bcode, tcode, iso1, en_name, _fr_name = [
+                    p.strip() for p in parts[:5]
+                ]
 
-            # 3-koodi: T-koodi jos on, muuten B-koodi
-            code3 = tcode or bcode
-            if not code3:
-                skipped += 1
-                continue
+                code3 = tcode or bcode
+                if not code3:
+                    skipped += 1
+                    continue
 
-            result[code3] = {
-                "name": en_name,
-                "iso639_2B": bcode or "",
-                "iso639_2T": tcode or "",
-                "iso639_1": iso1 or "",
-                "iso639_3": code3,
-            }
+                result[code3] = {
+                    "name": en_name,
+                    "iso639_2B": bcode or "",
+                    "iso639_2T": tcode or "",
+                    "iso639_1": iso1 or "",
+                    "iso639_3": code3,
+                }
+    except OSError as e:
+        raise OperationalError(
+            f"Could not read {src}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
 
-    log.info("Parsittu %d koodia, ohitettu %d riviä", len(result), skipped)
+    log.info(
+        "Parsed %d codes, skipped %d lines", len(result), skipped
+    )
     return result
 
 
-def main():
+def main() -> int:
+    data_root = get_data_dir()
+    default_src = data_root / "iso-639-2.txt"
+    default_out = data_root / "iso_639_2.json"
+
     parser = argparse.ArgumentParser(
-        description="Parsii ISO 639-2 -lähdetiedoston JSON-muotoon.",
+        description="Parse the ISO 639-2 source file to JSON.",
     )
     parser.add_argument(
-        "--input", type=Path, default=DEFAULT_SRC,
-        help=f"Lähdetiedosto (oletus: {DEFAULT_SRC})",
+        "--input", type=Path, default=default_src,
+        help=f"Source file (default: {default_src})",
     )
     parser.add_argument(
-        "--output", type=Path, default=DEFAULT_OUT,
-        help=f"Tulostiedosto (oletus: {DEFAULT_OUT})",
+        "--output", type=Path, default=default_out,
+        help=f"Output file (default: {default_out})",
     )
     args = parser.parse_args()
 
     if not args.input.exists():
-        raise SystemExit(f"Lähdetiedosto puuttuu: {args.input}")
+        log.error("Source file missing: %s", args.input)
+        return 1
 
-    log.info("Luetaan: %s", args.input)
-    result = parse_iso_639_2(args.input)
+    log.info("Reading: %s", args.input)
+    try:
+        result = parse_iso_639_2(args.input)
+    except OperationalError as exc:
+        log.error("%s", exc)
+        return 1
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    tmp = args.output.with_suffix(".json.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2, sort_keys=True)
-        f.flush()
-        os.fsync(f.fileno())
-    tmp.replace(args.output)
+    try:
+        _atomic_write_json(args.output, result)
+    except OperationalError as exc:
+        log.error("%s", exc)
+        return 1
 
-    log.info("Tallennettu: %s (%d koodia)", args.output, len(result))
+    log.info(
+        "Saved: %s (%d codes)", args.output, len(result)
+    )
+    return 0
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)s %(message)s",
-    )
-    main()
+    raise SystemExit(main())

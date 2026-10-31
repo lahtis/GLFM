@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -14,15 +14,16 @@ import re
 
 log = logging.getLogger(__name__)
 
-# ISO 15924 Script -koodit: 4 kirjainta, ensimmäinen iso, loput pieniä (Latn, Cyrl, Arab)
+# ISO 15924 script codes: 4 letters, first uppercase, rest lowercase
+# (Latn, Cyrl, Arab).
 SCRIPT_PATTERN = re.compile(r"^[A-Z][a-z]{3}$")
 
-# ISO 15924 -erikoiskoodit, joita ei koskaan käytetä oletusskriptinä
+# ISO 15924 special codes that are never used as a default script.
 SKIP_SCRIPTS = {"ZXXX", "ZYYY", "Zinh", "Zmth", "Zsye", "Zsym", "Zxxx"}
 
 
 def _is_valid_script(s: str) -> bool:
-    """Onko merkkijono kelvollinen ISO 15924 -skriptikoodi?"""
+    """Is the string a valid ISO 15924 script code?"""
     if not s or not isinstance(s, str):
         return False
     if s.upper() == "UNKNOWN":
@@ -32,24 +33,25 @@ def _is_valid_script(s: str) -> bool:
     return bool(SCRIPT_PATTERN.match(s))
 
 
-def decide_default_script(lang_id, wikt, cldr, written, iso_info, overrides=None):
-    """
-    Päätetään kielen oletuskirjoitusjärjestelmä hierarkkisesti:
+def decide_default_script(
+    lang_id, wikt, cldr, written, iso_info, overrides=None
+):
+    """Determine the default script hierarchically:
 
-    1. Ohitustiedosto (data/override_scripts.json) – paikkaa CLDR:n aukot
-    2. Written-languages -lähde
+    1. Override file (data/override_scripts.json) - fills CLDR gaps
+    2. Written-languages source
     3. CLDR likelySubtags
     4. Wiktionary
-    5. Ei löytynyt → ""
+    5. Not found -> ""
 
-    Palauttaa ISO 15924 -koodin (esim. "Latn") tai tyhjän merkkijonon.
+    Returns an ISO 15924 code (e.g. "Latn") or an empty string.
     """
     overrides = overrides or {}
 
     # 1. Overrides
     if lang_id in overrides:
         val = overrides[lang_id]
-        # Hyväksytään sekä lista että string
+        # Accept both list and string
         candidates = val if isinstance(val, list) else [val]
         for s in candidates:
             if _is_valid_script(s):
@@ -75,7 +77,7 @@ def decide_default_script(lang_id, wikt, cldr, written, iso_info, overrides=None
             if not isinstance(tag, str):
                 continue
             parts = tag.split("-")
-            # Etsi BCP-47 osista ISO 15924 -muotoinen skripti
+            # Find an ISO 15924-shaped script in the BCP-47 parts
             for part in parts[1:]:
                 if _is_valid_script(part):
                     return part.capitalize()

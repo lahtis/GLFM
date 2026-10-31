@@ -1,36 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Global Language Family Mapper (GLFM)
+# GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.7
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
 #
 
 import argparse
+import logging
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-# Ensure src/ is on sys.path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(PROJECT_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT / "src"))
-
+from glfm.errors import ConfigError, DataError, GlfmError, OperationalError
 from glfm.paths import get_data_dir
 
-OUTPUT_ROOT = get_data_dir()
-LOG_DIR = OUTPUT_ROOT / "logs"
+log = logging.getLogger(__name__)
 
 
 # --- Step definitions -------------------------------------------------------
 # Note: `download` and `pos_stats` are NOT part of the default pipeline.
 #   - `download` is unnecessary because the pipeline builds the data itself.
 #     Use separately: python3 -m glfm.download --tier consumer
-#   - `pos_stats` requires 5-10 GB of raw data. Use --with-pos.
+#   - `pos_stats` requires ~3 GB of raw data. Use --with-pos.
 STEPS = [
     ("generate",  "Generate ISO files",
      "glfm.tools.generate_iso_files", "producer"),
@@ -61,8 +57,8 @@ STEPS = [
 # Step added only with --with-pos
 POS_STEP = (
     "pos_stats",
-    "Compute POS statistics (optional, requires 5-10 GB raw data)",
-    "glfm.tools.compute_pos_stats",
+    "Compute POS statistics (optional, requires ~3 GB raw data)",
+    "glfm.tools.build_pos_stats",
     "optional",
 )
 
@@ -81,9 +77,11 @@ TIMEOUTS = {
 DEFAULT_TIMEOUT = 300
 
 
-def setup_logging():
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = LOG_DIR / f"pipeline_{datetime.now():%Y%m%d_%H%M%S}.log"
+def setup_logging(log_dir: Path) -> Path:
+    """Set up a Tee logger that writes to both stdout and a log file."""
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    log_path = log_dir / f"pipeline_{stamp}.log"
     log_file = open(log_path, "w", encoding="utf-8")
 
     class Tee:
@@ -104,8 +102,13 @@ def setup_logging():
     return log_path
 
 
-def run_step(title: str, module: str, timeout: int | None,
-             extra_args: list[str] | None = None) -> bool:
+def run_step(
+    title: str,
+    module: str,
+    timeout: int | None,
+    extra_args: list[str] | None = None,
+) -> bool:
+    """Run a single pipeline step as a subprocess."""
     print(f"\n=== {title} ===")
     print(f"Module: {module}")
     if extra_args:
@@ -124,7 +127,7 @@ def run_step(title: str, module: str, timeout: int | None,
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        print(f"\n[TIMEOUT] {title} exceeded {timeout}s – killing.")
+        print(f"\n[TIMEOUT] {title} exceeded {timeout}s - killing.")
         process.kill()
         process.wait()
         return False
@@ -156,31 +159,50 @@ def build_epilog() -> str:
     lines.append("")
 
     lines.append("Step types:")
-    lines.append("  [required]   producer step – pipeline stops on failure")
-    lines.append("  [validator]  validator step – recorded on failure, pipeline continues")
-    lines.append("  [optional]   optional step – skipped on failure, pipeline continues")
+    lines.append("  [required]   producer step - pipeline stops on failure")
+    lines.append(
+        "  [validator]  validator step - recorded on failure, "
+        "pipeline continues"
+    )
+    lines.append(
+        "  [optional]   optional step - skipped on failure, "
+        "pipeline continues"
+    )
     lines.append("")
 
     lines.append("Examples:")
     lines.append("  python3 -m glfm.run_full_pipeline")
     lines.append("  python3 -m glfm.run_full_pipeline --with-pos")
     lines.append("  python3 -m glfm.run_full_pipeline --skip compute")
-    lines.append("  python3 -m glfm.run_full_pipeline --only build compute consumer")
+    lines.append(
+        "  python3 -m glfm.run_full_pipeline --only build compute consumer"
+    )
     lines.append("  python3 -m glfm.run_full_pipeline --list")
     lines.append("  python3 -m glfm.run_full_pipeline --list --with-pos")
     lines.append("")
 
     lines.append("Notes:")
     lines.append("  - `download` is NOT part of the pipeline.")
-    lines.append("    Use `python3 -m glfm.download --tier consumer|research` separately.")
-    lines.append("  - `pos_stats` requires 5-10 GB of raw Wiktextract data (--with-pos).")
-    lines.append("    Download it first with: python3 -m glfm.tools.download_wiktextract")
-    lines.append("  - Without POS data, `pos_stats` is an empty {} for each language.")
+    lines.append(
+        "    Use `python3 -m glfm.download --tier consumer|research` "
+        "separately."
+    )
+    lines.append(
+        "  - `pos_stats` requires ~3 GB of raw Wiktextract data "
+        "(--with-pos)."
+    )
+    lines.append(
+        "    Download it first with: "
+        "python3 -m glfm.tools.download_wiktextract"
+    )
+    lines.append(
+        "  - Without POS data, `pos_stats` is an empty {} for each language."
+    )
 
     return "\n".join(lines)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="GLFM full pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -198,13 +220,17 @@ def main():
         "--with-pos",
         action="store_true",
         help=(
-            "Include POS statistics (requires 5-10 GB raw Wiktextract data). "
-            "Download it first with: python3 -m glfm.tools.download_wiktextract"
+            "Include POS statistics (requires ~3 GB raw Wiktextract "
+            "data). Download it first with: "
+            "python3 -m glfm.tools.download_wiktextract"
         ),
     )
     parser.add_argument(
         "--list", action="store_true",
-        help="List all available steps and exit (use --with-pos to include pos_stats)",
+        help=(
+            "List all available steps and exit (use --with-pos to "
+            "include pos_stats)"
+        ),
     )
     args = parser.parse_args()
 
@@ -226,18 +252,34 @@ def main():
                 "optional":  "[optional]",
             }[kind]
             print(f"  {key:12s} {title:55s} {marker}")
-        return
+        return 0
 
     if args.only:
         steps = [s for s in all_steps if s[0] in args.only]
         if not steps:
             print(f"[ERROR] --only did not match any keys: {args.only}")
-            print(f"        Available keys: {', '.join(s[0] for s in all_steps)}")
-            sys.exit(1)
+            print(
+                f"        Available keys: "
+                f"{', '.join(s[0] for s in all_steps)}"
+            )
+            return 1
     else:
         steps = [s for s in all_steps if s[0] not in args.skip]
 
-    log_path = setup_logging()
+    # Resolve data/log paths here, not at module import time.
+    try:
+        output_root = get_data_dir()
+        log_dir = output_root / "logs"
+    except (ConfigError, OSError) as e:
+        print(f"[ERROR] Could not resolve data directory: {e}")
+        return 1
+
+    try:
+        log_path = setup_logging(log_dir)
+    except OSError as e:
+        print(f"[ERROR] Could not set up logging: {e}")
+        return 1
+
     print("========================================")
     print(" FULL PIPELINE EXECUTION")
     print("========================================")
@@ -270,16 +312,19 @@ def main():
     if not failed:
         print(" FULL PIPELINE COMPLETED SUCCESSFULLY")
         if skipped:
-            print(f" (optional steps skipped: {', '.join(k for k, _ in skipped)})")
-        print(" Reports in ~/.cache/glfm/data/validation/")
+            print(
+                f" (optional steps skipped: "
+                f"{', '.join(k for k, _ in skipped)})"
+            )
+        print(f" Reports in {output_root}/validation/")
     else:
         print(" PIPELINE COMPLETED WITH ERRORS")
         for key, reason in failed:
             print(f"   - {key}: {reason}")
     print("========================================")
 
-    sys.exit(0 if not failed else 1)
+    return 0 if not failed else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

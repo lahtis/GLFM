@@ -3,95 +3,143 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
 #
 
+import argparse
 import json
 import logging
+import os
 from pathlib import Path
 
+from glfm.errors import OperationalError
 from glfm.paths import get_data_dir
 
 log = logging.getLogger(__name__)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-ISO_TAB_FILE = get_data_dir() / "iso_639_3.tab"
-OUTPUT_JSON = get_data_dir() / "extinct_languages.json"
-
-# SIL Language_Type -arvot, jotka lasketaan "kuolleiksi":
+# SIL Language_Type values that count as "dead":
 #   E = Extinct
 #   A = Ancient
 #   H = Historical
 EXTINCT_TYPES = ("E", "A", "H")
 
 
-def generate_extinct_json() -> None:
-    """
-    Lukee ISO 639-3 .tab -tiedoston ja generoi kevyen JSON-tiedoston
-    kuolleista kielistä.
+def _atomic_write_json(path: Path, data: dict) -> None:
+    """Atomic JSON write."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(path)
+    except OSError as e:
+        raise OperationalError(
+            f"Could not write {path}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
 
-    Säilyttää aiemmat manuaaliset lisäykset (esim. 'lat'), jos tiedosto
-    on jo olemassa.
+
+def generate_extinct_json(iso_tab: Path, output_json: Path) -> None:
+    """Read ISO 639-3 .tab and generate a small JSON of dead languages.
+
+    Preserves previous manual additions (e.g. 'lat') if the output file
+    already exists.
     """
     extinct_codes: set[str] = set()
 
-    # 1. Poimi E/A/H-koodit ISO 639-3 -taulukosta
-    if ISO_TAB_FILE.exists():
-        log.info("Luetaan ISO-taulukkoa: %s", ISO_TAB_FILE)
-        with open(ISO_TAB_FILE, "r", encoding="utf-8") as f:
-            f.readline()  # ohita otsikko
-            for line in f:
-                parts = line.rstrip("\n").split("\t")
-                if len(parts) >= 6:
-                    lang_id = parts[0].strip()
-                    lang_type = parts[5].strip()
-                    if lang_id and lang_type in EXTINCT_TYPES:
-                        extinct_codes.add(lang_id)
-        log.info("Löydetty %d koodia ISO-taulukosta.", len(extinct_codes))
-    else:
-        log.warning("Tiedostoa %s ei löytynyt!", ISO_TAB_FILE)
-
-    # 2. Säilytä aiemmat manuaaliset lisäykset
-    if OUTPUT_JSON.exists():
+    # 1. Collect E/A/H codes from the ISO 639-3 table
+    if iso_tab.exists():
+        log.info("Reading ISO table: %s", iso_tab)
         try:
-            with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
+            with open(iso_tab, "r", encoding="utf-8") as f:
+                f.readline()  # skip header
+                for line in f:
+                    parts = line.rstrip("\n").split("\t")
+                    if len(parts) >= 6:
+                        lang_id = parts[0].strip()
+                        lang_type = parts[5].strip()
+                        if lang_id and lang_type in EXTINCT_TYPES:
+                            extinct_codes.add(lang_id)
+        except OSError as e:
+            raise OperationalError(
+                f"Could not read {iso_tab}: {e}",
+                source="iso_639_3",
+                kind="transport",
+            ) from e
+        log.info(
+            "Found %d codes in ISO table", len(extinct_codes)
+        )
+    else:
+        log.warning("File not found: %s", iso_tab)
+
+    # 2. Preserve previous manual additions
+    if output_json.exists():
+        try:
+            with open(output_json, "r", encoding="utf-8") as f:
                 old_data = json.load(f)
             old_codes = old_data.get("codes", [])
             if isinstance(old_codes, list):
                 extinct_codes.update(old_codes)
-                log.info("Säilytetty %d aiempaa manuaalista koodia.",
-                         len(old_codes))
+                log.info(
+                    "Preserved %d previous manual codes",
+                    len(old_codes),
+                )
         except (json.JSONDecodeError, OSError, TypeError) as e:
-            log.warning("Ei voitu lukea %s: %s", OUTPUT_JSON, e)
+            log.warning("Could not read %s: %s", output_json, e)
 
     sorted_codes = sorted(extinct_codes)
 
     data_to_save = {
         "description": (
-            "Esikäsitelty lista ISO 639-3 kuolleista/historiallisista "
-            "kielistä sekä manuaalisista lisäyksistä."
+            "Pre-processed list of ISO 639-3 dead/historical languages "
+            "and manual additions."
         ),
         "count": len(sorted_codes),
         "codes": sorted_codes,
     }
 
-    # Atominen kirjoitus
-    OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    tmp = OUTPUT_JSON.with_suffix(".json.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data_to_save, f, ensure_ascii=False, indent=2)
-    tmp.replace(OUTPUT_JSON)
+    _atomic_write_json(output_json, data_to_save)
 
-    log.info("Valmis! Tallennettu %d kuollutta kielikoodia: %s",
-             len(sorted_codes), OUTPUT_JSON)
+    log.info(
+        "Done. Saved %d dead language codes: %s",
+        len(sorted_codes), output_json,
+    )
+
+
+def main() -> int:
+    data_root = get_data_dir()
+    default_iso_tab = data_root / "iso_639_3.tab"
+    default_output = data_root / "extinct_languages.json"
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Generate a JSON list of dead ISO 639-3 languages."
+        ),
+    )
+    parser.add_argument(
+        "--input", type=Path, default=default_iso_tab,
+        help=f"ISO 639-3 .tab file (default: {default_iso_tab})",
+    )
+    parser.add_argument(
+        "--output", type=Path, default=default_output,
+        help=f"Output JSON (default: {default_output})",
+    )
+    args = parser.parse_args()
+
+    try:
+        generate_extinct_json(args.input, args.output)
+    except OperationalError as exc:
+        log.error("%s", exc)
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)s %(message)s",
-    )
-    generate_extinct_json()
+    raise SystemExit(main())

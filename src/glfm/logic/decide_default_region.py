@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -17,18 +17,18 @@ log = logging.getLogger(__name__)
 
 
 def decide_default_region(lang_id, wikt, cldr, iso_info):
-    """
-    Päätetään oletusalue (ISO 3166-1 alpha-2 tai "001" = World):
+    """Determine the default region (ISO 3166-1 alpha-2 or "001" = World):
 
-    1. CLDR likelySubtags → region  (fi-Latn-FI → FI)
-    2. Wiktionary → region          (jos löytyy ja ei UNKNOWN)
+    1. CLDR likelySubtags -> region  (fi-Latn-FI -> FI)
+    2. Wiktionary -> region          (if present and not UNKNOWN)
     3. fallback: '001' (World)
     """
     # 1. CLDR
     cldr_key = resolve_cldr_key(lang_id, iso_info)
     tag = cldr.get(cldr_key) if isinstance(cldr, dict) else None
     if isinstance(tag, str):
-        parts = tag.split("-")   # CLDR käyttää '-' (esim. fi-Latn-FI)
+        # CLDR uses '-' (e.g. fi-Latn-FI)
+        parts = tag.split("-")
         if len(parts) >= 3:
             region = parts[2].strip()
             if region and region.upper() != "UNKNOWN":

@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -11,29 +11,28 @@
 
 
 def build_bcp47(lang_id, script, region, iso_info):
-    """
-    Rakentaa BCP-47 tagin muodossa: lang[-Script][-Region]
+    """Build a BCP-47 tag in the form: lang[-Script][-Region]
 
-    Kanoninen kirjainkoko (RFC 5646 §2.1.1):
+    Canonical casing (RFC 5646 §2.1.1):
       language = lowercase  (fi)
       script   = Titlecase  (Latn)
       region   = UPPERCASE  (FI)
 
-    - Käyttää iso639_1:tä jos löytyy, muuten lang_id
-    - Ei lisää "UNKNOWN" tai "001"
-    - Suodattaa tyhjät arvot
-    - Strip() tarkistetaan JA käytetään
+    - Uses iso639_1 if available, otherwise lang_id
+    - Does not add "UNKNOWN" or "001"
+    - Filters empty values
+    - strip() is checked AND used
     """
     lang = ((iso_info or {}).get("iso639_1") or lang_id).lower()
     parts = [lang]
 
-    # Script → Titlecase (Latn, Cyrl, Arab, ...)
+    # Script -> Titlecase (Latn, Cyrl, Arab, ...)
     if script:
         s = script.strip()
         if s and s.upper() != "UNKNOWN":
             parts.append(s.capitalize())
 
-    # Region → UPPERCASE (FI, SE, DE, ...)
+    # Region -> UPPERCASE (FI, SE, DE, ...)
     if region:
         r = region.strip()
         if r and r.upper() not in ("UNKNOWN", "001"):

@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.4
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -15,29 +15,35 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
+from glfm.errors import DataError, OperationalError
 from glfm.paths import get_data_dir
 
 log = logging.getLogger(__name__)
 
 
 def _load_data_module(name: str):
-    """
-    Lataa .py-moduuli data/-hakemistosta (esim. iso_639_1.py).
+    """Load a .py module from the data directory (e.g. iso_639_1.py).
 
-    Palauttaa None jos tiedosto puuttuu.
+    Returns None if the file is missing.
     """
     path = get_data_dir() / f"{name}.py"
     if not path.exists():
-        log.debug("Data-moduuli puuttuu: %s", path)
+        log.debug("Data module missing: %s", path)
         return None
 
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
-        log.warning("Ei voi ladata moduulia: %s", path)
+        log.warning("Could not load module: %s", path)
         return None
 
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except (SyntaxError, ImportError) as e:
+        raise DataError(
+            f"Could not execute {path}: {e}",
+            source=name,
+        ) from e
     return module
 
 
@@ -56,39 +62,50 @@ def _as_list(v) -> list:
 
 
 def load_sil_types() -> Dict[str, str]:
-    """
-    Lukee SIL:n iso_639_3.tab-tiedostosta Language_Type-sarakkeen.
+    """Read the SIL Language_Type column from iso_639_3.tab.
 
-    Palauttaa {iso639_3: language_type}, esim. {"fin": "L", "lat": "H"}.
+    Returns {iso639_3: language_type}, e.g. {"fin": "L", "lat": "H"}.
     """
     sil_file = get_data_dir() / "iso_639_3.tab"
 
     if not sil_file.exists():
-        log.warning("iso_639_3.tab puuttuu (%s) – language_type jää tyhjäksi",
-                    sil_file)
+        log.warning(
+            "iso_639_3.tab missing (%s) - language_type will be empty",
+            sil_file,
+        )
         return {}
 
     types: Dict[str, str] = {}
-    with open(sil_file, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            code = row.get("Id", "").strip()
-            ltype = row.get("Language_Type", "").strip()
-            if code and ltype:
-                types[code] = ltype
+    try:
+        with open(sil_file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            for row in reader:
+                code = row.get("Id", "").strip()
+                ltype = row.get("Language_Type", "").strip()
+                if code and ltype:
+                    types[code] = ltype
+    except OSError as e:
+        raise OperationalError(
+            f"Could not read {sil_file}: {e}",
+            source="iso_639_3",
+            kind="transport",
+        ) from e
+    except csv.Error as e:
+        raise DataError(
+            f"Could not parse {sil_file}: {e}",
+            source="iso_639_3",
+        ) from e
 
-    log.info("Ladattu %d SIL Language_Type -arvoa", len(types))
+    log.info("Loaded %d SIL Language_Type values", len(types))
     return types
 
 
 def load_iso_639() -> Dict[str, Any]:
-    """
-    Palauttaa vain ISO 639-3 -kielet SIL Language_Type -kentällä.
+    """Return only ISO 639-3 languages with SIL Language_Type.
 
-    Data ladataan get_data_dir()-hakemistosta (repo root / data
-    tai ~/.cache/glfm/data).
+    Data is loaded from get_data_dir() (repo root / data or
+    ~/.cache/glfm/data).
     """
-    # Lataa data-moduulit data/-hakemistosta
     mod1 = _load_data_module("iso_639_1")
     mod2 = _load_data_module("iso_639_2")
     mod3 = _load_data_module("iso_639_3")
@@ -97,28 +114,35 @@ def load_iso_639() -> Dict[str, Any]:
 
     if mod3 is None:
         data_dir = get_data_dir()
-        raise RuntimeError(
-            f"iso_639_3.py puuttuu: {data_dir / 'iso_639_3.py'}\n"
-            f"Aja ensin: python3 -m glfm.tools.generate_iso_files"
+        raise OperationalError(
+            f"iso_639_3.py missing: {data_dir / 'iso_639_3.py'}. "
+            f"Run first: python3 -m glfm.tools.generate_iso_files",
+            source="iso_639_3",
+            kind="transport",
         )
 
     iso_639_1 = getattr(mod1, "iso_639_1", {}) if mod1 else {}
     iso_639_2 = getattr(mod2, "iso_639_2", {}) if mod2 else {}
     iso_639_3 = getattr(mod3, "iso_639_3", {})
-    iso_639_3_names = getattr(mod_names, "iso_639_3_names", {}) if mod_names else {}
+    iso_639_3_names = (
+        getattr(mod_names, "iso_639_3_names", {}) if mod_names else {}
+    )
     iso_639_3_macrolanguages = (
-        getattr(mod_macro, "iso_639_3_macrolanguages", {}) if mod_macro else {}
+        getattr(mod_macro, "iso_639_3_macrolanguages", {})
+        if mod_macro else {}
     )
 
     if not isinstance(iso_639_3, dict):
-        raise TypeError(
-            f"iso_639_3 pitäisi olla dict, on {type(iso_639_3).__name__}"
+        raise DataError(
+            f"iso_639_3 should be a dict, got "
+            f"{type(iso_639_3).__name__}",
+            source="iso_639_3",
         )
 
     sil_types = load_sil_types()
     unified: Dict[str, Any] = {}
 
-    # --- ISO 639-3: peruskielet ---
+    # --- ISO 639-3: base languages ---
     for code3, info3 in iso_639_3.items():
         unified[code3] = {
             "name": _safe(info3, "name", code3),
@@ -129,13 +153,17 @@ def load_iso_639() -> Dict[str, Any]:
             "iso639_5": "",
             "language_type": sil_types.get(code3, ""),
             "aliases": _as_list(iso_639_3_names.get(code3)),
-            "macrolanguages": _as_list(iso_639_3_macrolanguages.get(code3)),
+            "macrolanguages": _as_list(
+                iso_639_3_macrolanguages.get(code3)
+            ),
         }
 
-    # --- ISO 639-2: varmista 2-koodit ---
+    # --- ISO 639-2: ensure 2-letter codes ---
     for code3, info2 in iso_639_2.items():
         if code3 not in unified:
-            log.debug("ISO 639-2 koodi %s ei ole 639-3:ssa (kollektiivinen)", code3)
+            log.debug(
+                "ISO 639-2 code %s not in 639-3 (collective)", code3
+            )
             continue
         unified[code3]["iso639_2B"] = _safe(
             info2, "iso639_2B", unified[code3]["iso639_2B"]
@@ -144,7 +172,7 @@ def load_iso_639() -> Dict[str, Any]:
             info2, "iso639_2T", unified[code3]["iso639_2T"]
         )
 
-    # --- ISO 639-1: varmista 1-koodit ---
+    # --- ISO 639-1: ensure 1-letter codes ---
     count_iso1 = 0
     for code1, value in iso_639_1.items():
         if isinstance(value, dict):
@@ -153,7 +181,7 @@ def load_iso_639() -> Dict[str, Any]:
             code3 = value
         else:
             log.warning(
-                "iso_639_1[%s] tuntematon tyyppi (%s) – ohitetaan",
+                "iso_639_1[%s] unknown type (%s) - skipping",
                 code1, type(value).__name__,
             )
             continue
@@ -163,14 +191,14 @@ def load_iso_639() -> Dict[str, Any]:
             count_iso1 += 1
 
     log.info(
-        "Ladattu %d ISO 639-3 -kieltä, %d sai ISO 639-1 -koodin",
+        "Loaded %d ISO 639-3 languages, %d got ISO 639-1 code",
         len(unified), count_iso1,
     )
     return unified
 
 
 def load_iso_639_5() -> Dict[str, Any]:
-    """ISO 639-5 -perheet erillisenä (ei kielilistassa)."""
+    """ISO 639-5 families separately (not in the language list)."""
     mod5 = _load_data_module("iso_639_5")
     if mod5 is None:
         return {}
@@ -183,5 +211,5 @@ def load_iso_639_5() -> Dict[str, Any]:
             "name": _safe(info5, "name", family_code),
             "iso639_5": family_code,
         }
-    log.info("Ladattu %d ISO 639-5 -kieliperhettä", len(families))
+    log.info("Loaded %d ISO 639-5 language families", len(families))
     return families

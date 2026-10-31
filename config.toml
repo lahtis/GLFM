@@ -4,10 +4,16 @@
 # config_version tracks the structure of DEFAULT_CONFIG in config.py.
 # Bump it when the structure changes (not on every package release).
 
-config_version = 2
+config_version = 3
 
 [sources.iso_639_3]
 url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
+
+[sources.iso_639_2]
+url = "https://www.loc.gov/standards/iso639-2/ISO-639-2_utf-8.txt"
+
+[sources.iso_639_1]
+url = "https://datahub.io/core/language-codes/r/language-codes.csv"
 
 [sources.iso_639_3_names]
 url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3_Name_Index.tab"
@@ -26,17 +32,17 @@ url = "https://raw.githubusercontent.com/unicode-org/cldr-json/48.0.0/cldr-json/
 endpoint = "https://query.wikidata.org/sparql"
 
 [sources.wiktextract]
-# Raw Wiktextract dump for POS statistics (~5-10 GB)
+# Raw Wiktextract dump for POS statistics (~3 GB compressed)
 # Used by: python3 -m glfm.tools.download_wiktextract
-#          python3 -m glfm.tools.compute_pos_stats
-url = "https://dumps.wikimedia.org/other/wiktextract/20260101/wiktextract-data.jsonl.gz"
+#          python3 -m glfm.tools.build_pos_stats
+url = "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz"
 filename = "raw-wiktextract-data.jsonl.gz"
 timeout = 3600
 
 [download.consumer]
 # Consumer data: 6554 languages, top-20 neighbors
 url = "https://codeberg.org/lahtis/GLFM/releases/download/v.1.0.7/languages_top20.json.gz"
-sha256 = ""
+sha256 = "98cba1e143e48efdc95f62b1f138bec60d588e3ea37b2a6326ed4e8ea93a9abe"
 size_kt = 558
 timeout = 300
 
@@ -46,7 +52,7 @@ github = "https://github.com/lahtis/GLFM/releases/download/v.1.0.7/languages_top
 [download.research]
 # Research data: 7928 languages, up to 100 neighbors
 url = "https://codeberg.org/lahtis/GLFM/releases/download/v.1.0.7/unified_languages.json.gz"
-sha256 = ""
+sha256 = "be1424f5dd948e19fba2dfa65683478491f796f0dec9d0d55d7d0afb432a9a30"
 size_mb = 1.4
 timeout = 300
 
@@ -62,7 +68,7 @@ decimals = [4, 6]
 checkpoint_interval = 1000
 
 [http]
-user_agent = "glfm/1.0.7 (https://codeberg.org/lahtis/GLFM)"
+# user_agent is built from __version__ in config.py — do not override here.
 timeout = 60
 
 [paths]

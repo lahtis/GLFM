@@ -3,82 +3,104 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.4
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
 #
-# Hakee ja lukee CLDR likelySubtags -datan.
-# URL ja versio luetaan configista (glfm.config / config.toml / env).
+# Fetch and read CLDR likelySubtags data.
+# URL and version are read from config (glfm.config / config.toml / env).
 #
 
 import argparse
 import gzip
 import json
 import logging
-import sys
 import urllib.request
 from pathlib import Path
 
+from glfm.config import load_config
+from glfm.errors import DataError, OperationalError
+from glfm.paths import get_data_dir
+from glfm.utils.safe_http import safe_urlopen
+from glfm.utils.safe_http_common import (
+    SafeHTTPError,
+    read_limited_response,
+)
+
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# CLDR likelySubtags is small (<1 MB compressed).
+MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-def _setup_imports() -> None:
-    """Varmistaa että src/ on sys.path:ssä (kehitys)."""
-    src = PROJECT_ROOT / "src"
-    if src.exists() and str(src) not in sys.path:
-        sys.path.insert(0, str(src))
+def _safe_http_to_operational(
+    exc: SafeHTTPError,
+    source: str,
+) -> OperationalError:
+    """Translate SafeHTTPError into a user-facing OperationalError."""
+    retryable = (
+        exc.kind in ("timeout", "transport")
+        or (
+            exc.status_code is not None
+            and exc.status_code in (429, 500, 502, 503, 504)
+        )
+    )
+    return OperationalError(
+        str(exc),
+        source=source,
+        kind=exc.kind,
+        status_code=exc.status_code,
+        temporary=retryable,
+        retryable=retryable,
+    )
 
 
-_setup_imports()
-
-from glfm.config import load_config
-from glfm.paths import get_data_dir
-
-
-def _get_cldr_config() -> dict:
-    """Palauttaa CLDR-konfiguraation."""
-    config = load_config()
+def _get_cldr_config(config: dict) -> dict:
+    """Return CLDR config from a loaded config dict."""
     cldr = config.get("sources", {}).get("cldr", {})
     if not cldr.get("url"):
-        raise RuntimeError(
-            "Config: sources.cldr.url puuttuu. "
-            "Tarkista config.toml tai GLFM_CLDR_URL."
+        raise OperationalError(
+            "Config: sources.cldr.url is missing. "
+            "Check config.toml or GLFM_CLDR_URL.",
+            source="cldr",
+            kind="invalid_response",
         )
+    http = config.get("http", {})
     return {
         "version": cldr.get("version", "unknown"),
         "url": cldr["url"],
-        "user_agent": config.get("http", {}).get(
-            "user_agent", "glfm/1.0.4"
-        ),
-        "timeout": config.get("http", {}).get("timeout", 60),
+        "user_agent": http["user_agent"],
+        "timeout": http.get("timeout", 60),
     }
 
 
 def _cldr_local_file() -> Path:
-    """Palauttaa CLDR-tiedoston polun (data/cldr/likelySubtags.json.gz)."""
+    """Return the CLDR file path (data/cldr/likelySubtags.json.gz)."""
     return get_data_dir() / "cldr" / "likelySubtags.json.gz"
 
 
-def fetch_cldr_likely_subtags(force: bool = False) -> Path:
-    """
-    Hakee CLDR likelySubtags.json -tiedoston ja tallentaa gzipattuna.
+def fetch_cldr_likely_subtags(
+    config: dict,
+    force: bool = False,
+) -> Path:
+    """Fetch CLDR likelySubtags.json and save it gzipped.
 
-    URL ja versio luetaan configista. Käytetään erikseen, kun halutaan
-    päivittää data.
+    URL and version are read from config. Used separately when the
+    data needs updating.
 
-    Palauttaa tallennetun tiedoston polun.
+    Returns the path to the saved file.
     """
-    cldr = _get_cldr_config()
+    cldr = _get_cldr_config(config)
     local_file = _cldr_local_file()
 
     if local_file.exists() and not force:
-        log.info("CLDR-data jo olemassa: %s", local_file)
+        log.info("CLDR data already exists: %s", local_file)
         return local_file
 
-    log.info("Ladataan CLDR %s: %s", cldr["version"], cldr["url"])
+    log.info(
+        "Downloading CLDR %s: %s", cldr["version"], cldr["url"]
+    )
 
     req = urllib.request.Request(
         cldr["url"],
@@ -86,80 +108,101 @@ def fetch_cldr_likely_subtags(force: bool = False) -> Path:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=cldr["timeout"]) as resp:
-            data = resp.read()
-    except Exception as e:
-        raise RuntimeError(
-            f"CLDR-lataus epäonnistui: {e}. "
-            f"Tarkista verkko tai aseta data manuaalisesti: {local_file}"
-        ) from e
+        with safe_urlopen(req, timeout=cldr["timeout"]) as resp:
+            data = read_limited_response(resp, MAX_DOWNLOAD_BYTES)
+    except SafeHTTPError as exc:
+        raise _safe_http_to_operational(exc, source="cldr") from exc
 
-    # Atominen kirjoitus: tmp + rename
-    local_file.parent.mkdir(parents=True, exist_ok=True)
-    tmp = local_file.with_suffix(".tmp")
-    with gzip.open(tmp, "wb") as f:
-        f.write(data)
+    try:
+        local_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = local_file.with_suffix(local_file.suffix + ".tmp")
+        with gzip.open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+    except OSError as e:
+        raise OperationalError(
+            f"Could not write {local_file}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
     tmp.replace(local_file)
 
-    log.info("Tallennettu: %s (%.1f kt)", local_file,
-             local_file.stat().st_size / 1024)
+    log.info(
+        "Saved: %s (%.1f kB)",
+        local_file, local_file.stat().st_size / 1024,
+    )
     return local_file
 
 
-def load_cldr_likely_subtags() -> dict:
-    """
-    Lukee bundled CLDR likelySubtags -datan.
+def load_cldr_likely_subtags(config: dict) -> dict:
+    """Read bundled CLDR likelySubtags data.
 
-    Palauttaa dictin muodossa: {"fi": "fi-Latn-FI", ...}
-    (CLDR 48+ käyttää väliviivoja, ei alaviivoja.)
+    Returns a dict of the form: {"fi": "fi-Latn-FI", ...}
+    (CLDR 48+ uses hyphens, not underscores.)
 
-    EI koske verkkoon, jos tiedosto on olemassa. Jos tiedosto puuttuu,
-    yrittää hakea sen kerran (fetch_cldr_likely_subtags).
+    Does NOT hit the network if the file exists. If the file is
+    missing, tries to fetch it once (fetch_cldr_likely_subtags).
     """
     local_file = _cldr_local_file()
 
     if not local_file.exists():
-        log.warning("CLDR-data puuttuu, yritetään hakea: %s", local_file)
-        try:
-            fetch_cldr_likely_subtags()
-        except RuntimeError as e:
-            log.error("CLDR-dataa ei saatu: %s", e)
-            raise
+        log.warning(
+            "CLDR data missing, trying to fetch: %s", local_file
+        )
+        fetch_cldr_likely_subtags(config)
 
-    with gzip.open(local_file, "rt", encoding="utf-8") as f:
-        raw = json.load(f)
+    try:
+        with gzip.open(local_file, "rt", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise DataError(
+            f"Could not read {local_file}: {e}",
+            source="cldr",
+        ) from e
 
     subtags = raw.get("supplemental", {}).get("likelySubtags", {})
     if not subtags:
-        raise RuntimeError(
-            f"CLDR-tiedosto {local_file} ei sisällä likelySubtags-dataa"
+        raise DataError(
+            f"CLDR file {local_file} does not contain "
+            f"likelySubtags data",
+            source="cldr",
         )
 
-    log.info("Ladattu %d CLDR likelySubtags -sääntöä", len(subtags))
+    log.info(
+        "Loaded %d CLDR likelySubtags rules", len(subtags)
+    )
     return subtags
 
 
-def main():
+def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s %(message)s",
     )
     parser = argparse.ArgumentParser(
-        description="Hae CLDR likelySubtags.json gzipattuna.",
+        description="Fetch CLDR likelySubtags.json gzipped.",
     )
     parser.add_argument(
         "--force", action="store_true",
-        help="Pakota uudelleenlataus (ohita olemassa oleva tiedosto)",
+        help="Force re-download (ignore existing file)",
     )
     args = parser.parse_args()
 
     try:
-        path = fetch_cldr_likely_subtags(force=args.force)
-    except RuntimeError as e:
-        log.error("%s", e)
+        config = load_config()
+        path = fetch_cldr_likely_subtags(
+            config, force=args.force
+        )
+    except OperationalError as exc:
+        log.error("Source error: %s", exc)
+        if exc.retryable:
+            log.error("Error is temporary - try again later.")
+        return 1
+    except DataError as exc:
+        log.error("Data error: %s", exc)
         return 1
 
-    print(f"Valmis: {path}")
+    print(f"Done: {path}")
     return 0
 
 

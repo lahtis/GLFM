@@ -3,13 +3,13 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
 #
-# Parsii ISO 639-1/2/3/5 -lähdetiedostot ja palauttaa jäsennellyn dictin.
-# Käytetään generate_iso_files.py:stä.
+# Parse ISO 639-1/2/3/5 source files and return a structured dict.
+# Used by generate_iso_files.py.
 #
 
 import argparse
@@ -18,16 +18,13 @@ import logging
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
-
-from glfm.paths import get_data_dir
 from typing import Any, Dict
+
+from glfm.errors import DataError, OperationalError
 
 log = logging.getLogger(__name__)
 
-# ISO 639-3 .tab -otsikko
-ISO3_HEADER = "Id\tPart2B\tPart2T\tPart1\tScope\tLanguage_Type\tRef_Name"
-
-# ISO 639-5 SKOS -nimiavaruudet
+# ISO 639-5 SKOS namespaces
 SKOS_NS = {
     "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
     "skos": "http://www.w3.org/2004/02/skos/core#",
@@ -36,20 +33,28 @@ RDF_ABOUT = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
 
 
 def _read_lines(path: Path):
-    """Lukee rivit tiedostosta, ohittaa tyhjät."""
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.rstrip("\n")
-            if line.strip():
-                yield line
+    """Yield non-empty lines from a file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if line.strip():
+                    yield line
+    except OSError as e:
+        raise OperationalError(
+            f"Could not read {path}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
 
 
-def parse_iso639_3(path: Path) -> tuple[Dict, Dict, Dict]:
-    """
-    Parsii iso-639-3.tab.
+def parse_iso639_3(
+    path: Path,
+) -> tuple[Dict, Dict, Dict]:
+    """Parse iso-639-3.tab.
 
-    Sarakkeet: Id, Part2B, Part2T, Part1, Scope, Language_Type, Ref_Name
-    Palauttaa (iso1, iso2, iso3) -dictit.
+    Columns: Id, Part2B, Part2T, Part1, Scope, Language_Type, Ref_Name
+    Returns (iso1, iso2, iso3) dicts.
     """
     iso3: Dict[str, Any] = {}
     iso1: Dict[str, str] = {}
@@ -64,7 +69,9 @@ def parse_iso639_3(path: Path) -> tuple[Dict, Dict, Dict]:
 
         parts = line.split("\t")
         if len(parts) < 7:
-            log.debug("Ohitetaan rivi: liian vähän sarakkeita: %r", line[:50])
+            log.debug(
+                "Skipping line: too few columns: %r", line[:50]
+            )
             continue
 
         parts = parts[:7]
@@ -89,17 +96,18 @@ def parse_iso639_3(path: Path) -> tuple[Dict, Dict, Dict]:
                 "iso639_2T": part2t or "",
             }
 
-    log.info("ISO 639-3: %d kieltä, 639-1: %d, 639-2: %d",
-             len(iso3), len(iso1), len(iso2))
+    log.info(
+        "ISO 639-3: %d languages, 639-1: %d, 639-2: %d",
+        len(iso3), len(iso1), len(iso2),
+    )
     return iso1, iso2, iso3
 
 
 def parse_iso639_3_names(path: Path) -> Dict[str, list]:
-    """
-    Parsii iso-639-3_Name_Index.tab.
+    """Parse iso-639-3_Name_Index.tab.
 
-    Sarakkeet: Id, Print_Name, Inverted_Name
-    Palauttaa {iso3: [nimi1, nimi2, ...]}.
+    Columns: Id, Print_Name, Inverted_Name
+    Returns {iso3: [name1, name2, ...]}.
     """
     names: Dict[str, set] = {}
 
@@ -123,17 +131,18 @@ def parse_iso639_3_names(path: Path) -> Dict[str, list]:
             entry.add(inverted_name.strip())
 
     result = {k: sorted(v) for k, v in names.items()}
-    log.info("ISO 639-3 nimet: %d kieltä, %d nimeä yhteensä",
-             len(result), sum(len(v) for v in result.values()))
+    log.info(
+        "ISO 639-3 names: %d languages, %d names total",
+        len(result), sum(len(v) for v in result.values()),
+    )
     return result
 
 
 def parse_iso639_3_macrolanguages(path: Path) -> Dict[str, list]:
-    """
-    Parsii iso-639-3_macrolanguages.tab.
+    """Parse iso-639-3_macrolanguages.tab.
 
-    Sarakkeet: M_Id, I_Id, I_Status
-    Palauttaa {makrokieli: [yksittäinen_kieli, ...]}.
+    Columns: M_Id, I_Id, I_Status
+    Returns {macro: [individual, ...]}.
     """
     macros: Dict[str, list] = {}
 
@@ -151,23 +160,32 @@ def parse_iso639_3_macrolanguages(path: Path) -> Dict[str, list]:
         macro, individual, _status = parts[:3]
         macros.setdefault(macro, []).append(individual)
 
-    log.info("ISO 639-3 makrokielet: %d makrokieltä", len(macros))
+    log.info(
+        "ISO 639-3 macrolanguages: %d macrolanguages", len(macros)
+    )
     return macros
 
 
 def parse_iso639_5_rdf(path: Path) -> Dict[str, str]:
-    """
-    Parsii ISO 639-5 SKOS RDF -tiedoston.
+    """Parse ISO 639-5 SKOS RDF file.
 
-    Palauttaa {koodi: nimi}.
+    Returns {code: name}.
     """
     iso5: Dict[str, str] = {}
 
     try:
         tree = ET.parse(path)
     except ET.ParseError as e:
-        log.error("ISO 639-5 RDF ei ole kelvollinen XML: %s", e)
-        return {}
+        raise DataError(
+            f"ISO 639-5 RDF is not valid XML: {e}",
+            source="iso_639_5",
+        ) from e
+    except OSError as e:
+        raise OperationalError(
+            f"Could not read {path}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
 
     root = tree.getroot()
 
@@ -176,8 +194,10 @@ def parse_iso639_5_rdf(path: Path) -> Dict[str, str]:
         if not about:
             continue
 
-        # Hyväksy vain ISO 639-5 -koodit
-        if not about.startswith("http://id.loc.gov/vocabulary/iso639-5/"):
+        # Accept only ISO 639-5 codes.
+        if not about.startswith(
+            "http://id.loc.gov/vocabulary/iso639-5/"
+        ):
             continue
 
         code = about.rsplit("/", 1)[-1]
@@ -185,7 +205,7 @@ def parse_iso639_5_rdf(path: Path) -> Dict[str, str]:
         if label is not None and label.text:
             iso5[code] = label.text
 
-    log.info("ISO 639-5: %d kieliperhettä", len(iso5))
+    log.info("ISO 639-5: %d language families", len(iso5))
     return iso5
 
 
@@ -195,12 +215,14 @@ def parse_all_iso_files(
     macrolanguages_path: Path,
     iso639_5_path: Path,
 ) -> Dict[str, Any]:
-    """
-    Parsii kaikki ISO-lähteet ja palauttaa yhdistetyn dictin.
-    """
+    """Parse all ISO sources and return a combined dict."""
     for p in (iso639_3_path, name_index_path, macrolanguages_path):
         if not Path(p).exists():
-            raise FileNotFoundError(f"Lähdetiedosto puuttuu: {p}")
+            raise OperationalError(
+                f"Source file missing: {p}",
+                source="filesystem",
+                kind="transport",
+            )
 
     iso1, iso2, iso3 = parse_iso639_3(Path(iso639_3_path))
     names = parse_iso639_3_names(Path(name_index_path))
@@ -210,7 +232,7 @@ def parse_all_iso_files(
     if Path(iso639_5_path).exists():
         iso5 = parse_iso639_5_rdf(Path(iso639_5_path))
     else:
-        log.warning("ISO 639-5 RDF puuttuu: %s", iso639_5_path)
+        log.warning("ISO 639-5 RDF missing: %s", iso639_5_path)
 
     return {
         "iso639_1": iso1,
@@ -222,28 +244,49 @@ def parse_all_iso_files(
     }
 
 
-def main(argv=None):
+def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Parsii ISO 639 -lähdetiedostot JSON-muotoon.",
+        description="Parse ISO 639 source files to JSON.",
     )
     parser.add_argument("iso639_3", type=Path, help="iso-639-3.tab")
-    parser.add_argument("names", type=Path, help="iso-639-3_Name_Index.tab")
-    parser.add_argument("macros", type=Path, help="iso-639-3_macrolanguages.tab")
-    parser.add_argument("iso639_5", type=Path, help="iso-639-5.skos.rdf")
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "names", type=Path, help="iso-639-3_Name_Index.tab"
+    )
+    parser.add_argument(
+        "macros", type=Path, help="iso-639-3_macrolanguages.tab"
+    )
+    parser.add_argument(
+        "iso639_5", type=Path, help="iso-639-5.skos.rdf"
+    )
+    args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s %(message)s",
     )
 
-    data = parse_all_iso_files(
-        args.iso639_3, args.names, args.macros, args.iso639_5,
-    )
+    try:
+        data = parse_all_iso_files(
+            args.iso639_3, args.names, args.macros, args.iso639_5,
+        )
+    except OperationalError as exc:
+        log.error("Source error: %s", exc)
+        if exc.retryable:
+            log.error("Error is temporary — try again later.")
+        return 1
+    except DataError as exc:
+        log.error("Data error: %s", exc)
+        return 1
 
-    json.dump(data, sys.stdout, ensure_ascii=False, indent=2)
-    print()
+    try:
+        json.dump(data, sys.stdout, ensure_ascii=False, indent=2)
+        print()
+    except (OSError, ValueError) as exc:
+        log.error("Could not write output: %s", exc)
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

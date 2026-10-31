@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.0] — 2026-10-31
+
+This release introduces a vendored `safe_http` layer, a proper error
+hierarchy, Python 3.11+ requirement, and a config version bump to 3.
+All outbound HTTP now goes through `safe_urlopen` (SSRF protection,
+redirect validation, response size limits).
+
+### Added
+
+#### Error hierarchy
+
+- **`glfm.errors`** — new module with `GlfmError`, `ConfigError`,
+  `OperationalError`, and `DataError`.
+  - `OperationalError` carries `source`, `kind`, `status_code`,
+    `temporary`, and `retryable`.
+  - `DataError` carries `source`.
+- **`tests/errors/test_kind_protocol.py`** — guard test that verifies
+  all `OperationalError.kind` values are known.
+
+#### Vendored `safe_http` (from SHL v0.3.0)
+
+- **`glfm.utils.safe_http_common`** — vendored. Provides
+  `SafeHTTPError`, `MAX_RESPONSE_BYTES`, `MAX_REDIRECTS`,
+  `DEFAULT_TIMEOUT`, `resolve_all_ips`, `read_limited_response`.
+- **`glfm.utils.safe_http`** — vendored. Provides `safe_urlopen`.
+  - HTTPS only, IP-level SSRF prevention, redirect validation,
+    response size limits.
+- **`glfm.utils.__init__`** — re-exports `SafeHTTPError`,
+  `MAX_RESPONSE_BYTES`, `MAX_REDIRECTS`, `read_limited_response`,
+  `safe_urlopen`.
+
+#### Configuration
+
+- **`sources.iso_639_2`** and **`sources.iso_639_1`** — new config keys
+  with default URLs (LoC and DataHub).
+- **`GLFM_ISO_639_2_URL`**, **`GLFM_ISO_639_1_URL`** — new environment
+  variables.
+- **`CONFIG_VERSION`** bumped to `3`.
+
+#### CLI
+
+- **`[project.scripts]`** — `glfm` and `glfm-download` entry points.
+- **`build_glottolog_json.py`** — Content-Type validation
+  (`application/sparql-results+json`), 50 MB response size limit.
+- **`download_wiktextract.py`** — `--output`, `--timeout` CLI flags.
+
+### Changed
+
+#### Python version
+
+- **`requires-python`** raised from `>=3.9` to `>=3.11`. Python 3.9 and
+  3.10 are no longer supported.
+- **Classifiers** updated to 3.11, 3.12, 3.13.
+- **`setuptools`** raised to `>=77.0.0` (PEP 639 SPDX license support).
+
+#### Configuration
+
+- **`license`** changed from `{ text = "MIT" }` to SPDX `"MIT"`.
+- **`sources.wiktextract.url`** changed from a Wikimedia URL (404) to
+  `https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz`.
+  Comment updated: ~3 GB compressed, updated weekly.
+- **`dev`/`data` extras split**:
+  - `dev`: `pytest`, `pytest-cov`, `ruff`, `mypy`, `build`, `twine`.
+  - `data`: `numpy`, `requests`, `msgpack`, `graphviz`, `lang2vec`,
+    `setuptools<82` (lang2vec imports `pkg_resources`, removed in
+    setuptools 82).
+
+#### HTTP layer
+
+- **`download.py`** — uses `safe_urlopen` + `read_limited_response`.
+  Translates `SafeHTTPError` -> `OperationalError`.
+- **`build_glottolog_json.py`** — uses `safe_urlopen` +
+  `read_limited_response`. 50 MB limit for SPARQL responses.
+- **`download_wiktextract.py`** — uses `safe_urlopen` + chunked
+  streaming (1 MB). No `read_limited_response` (3 GB file).
+- **`generate_iso_files.py`** — uses `safe_urlopen` +
+  `read_limited_response`. 10 MB limit.
+- **`load_cldr_likely_subtags.py`** — uses `safe_urlopen` +
+  `read_limited_response`. 10 MB limit.
+
+#### Loaders
+
+- **`load_pos_stats.py`** — remaps ISO 639-1 keys (`fi`) to ISO 639-3
+  (`fin`) using `data/iso_639_1.py`, so POS data aligns with
+  `unified_languages.json`.
+- **`load_cldr_likely_subtags()`** and **`load_pos_stats()`** now take
+  `config: dict` where needed.
+
+#### Core modules
+
+- **`build_unified.py`** — takes `config: dict`. Atomic writes with
+  `fsync` for both pretty and gzip JSON.
+- **`paths.py`** — `lru_cache` on `_get_cache_dir_cached()` and
+  `_get_data_dir_cached()`. Reduces repeated `config.toml` reads.
+- **`_version.py`** — version bumped to `1.1.0`. `__version_tuple__` now
+  uses `re.findall(r"\d+", ...)` to support PEP 440 pre-releases
+  (`dev`, `a`, `b`, `rc`).
+- **`__init__.py`** — single import from `glfm._version`. Fallback
+  removed (always present in installed package).
+
+#### Pipeline
+
+- **`run_full_pipeline.py`** — `POS_STEP` module corrected from
+  `glfm.tools.compute_pos_stats` to `glfm.tools.build_pos_stats`.
+  `OUTPUT_ROOT`/`LOG_DIR` moved from module level to `main()`.
+  `setup_logging(log_dir)` now takes a parameter.
+  `datetime.now(timezone.utc)` for timestamps.
+
+#### Language
+
+- **All comments, docstrings, and log messages** translated from Finnish
+  to English across `src/glfm/`.
+
+### Fixed
+
+- **`compute_pos_stats` module name** — pipeline step pointed to a
+  non-existent module (`glfm.tools.compute_pos_stats`). Corrected to
+  `glfm.tools.build_pos_stats`.
+- **`load_pos_stats` did not remap ISO 639-1 keys** — `pos_stats.json`
+  uses ISO 639-1 (`fi`), but `unified_languages.json` uses ISO 639-3
+  (`fin`). Fixed by reading `data/iso_639_1.py` and remapping.
+- **`wiktextract.url` pointed to a 404** — Wikimedia no longer hosts
+  Wiktextract dumps. Fixed by pointing to kaikki.org.
+- **`config.toml` version warning spam** — `lru_cache` in `paths.py`
+  reduces repeated `load_config()` calls (5x -> 1x per run).
+
+### Removed
+
+- **`sys.path.insert`** from all `tools/` and `models/` modules. The
+  package is installed via `pip install -e .`, so this is unnecessary.
+- **`PROJECT_ROOT`** constants from all modules (dead code).
+- **Fallback `__version__ = "1.0.4"`** in `__init__.py` (always present
+  in installed package).
+
+### Known issues
+
+- **`build_pos_stats.py` is single-threaded.** On a 88-thread machine
+  (Xeon E5-2680 v4), 87 threads are idle. Parallelization
+  (`multiprocessing.Pool` + gzip to disk) is planned for 1.2.0.
+- **`lang2vec` requires `setuptools<82`** because it imports
+  `pkg_resources`, which was removed in setuptools 82. Pinned in the
+  `data` extra.
+
+---
+
 ## [1.0.7] — 2026-10-31
 
 This release introduces configurable distance computation, optional POS
@@ -24,7 +169,7 @@ includes a 6-decimal distance field.
 - **`distance_decimals`** — a new per-language field listing the stored
   decimal precisions, currently `[4, 6]`.
 - **`_DISTANCE_BASES_MAP`** — maps each `distance_type` to the data sources
-  it uses (e.g. `syntax_knn` → `["WALS", "SSWL", "Ethnologue"]`).
+  it uses (e.g. `syntax_knn` -> `["WALS", "SSWL", "Ethnologue"]`).
 - **`_distance_bases_for(distance_type)`** — returns the correct
   `distance_bases` list for a given distance type. Unknown types fall back
   to the full default list.
@@ -35,9 +180,9 @@ includes a 6-decimal distance field.
 #### POS statistics (optional)
 
 - **`glfm.tools.download_wiktextract`** — new module for streaming the
-  Wiktextract dump (~5–10 GB) to the cache. Uses 1 MB chunks, logs
+  Wiktextract dump (~3 GB) to the cache. Uses 1 MB chunks, logs
   progress every 100 MB, and computes SHA256 during download.
-- **`glfm.tools.compute_pos_stats`** — new module for computing POS
+- **`glfm.tools.build_pos_stats`** — new module for computing POS
   statistics from the Wiktextract dump. Produces `pos_stats.json`.
 - **`--with-pos`** — new flag for `run_full_pipeline.py` that inserts
   the POS computation step before validation.
@@ -127,7 +272,7 @@ includes a 6-decimal distance field.
   because the pipeline builds the data itself. Use
   `python3 -m glfm.download --tier consumer|research` separately.
 - **`pos_stats` step removed** from the default pipeline. It requires
-  5–10 GB of raw data and is now opt-in via `--with-pos`.
+  ~3 GB of raw data and is now opt-in via `--with-pos`.
 - **Comments** translated from Finnish to English.
 
 #### `download_wiktextract.py`

@@ -3,15 +3,17 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
 #
-# HUOM: Tämä skripti tuottaa .json-tiedostot (data/iso_639_*.json).
-# load_iso_639.py lukee .py-moduulit (data/iso_639_*.py).
-# Nämä EIVÄT ole sama asia. Jos et tarvitse .json-tiedostoja,
-# älä aja tätä skriptiä.
+# NOTE: This script produces .json files (data/iso_639_*.json).
+# load_iso_639.py reads .py modules (data/iso_639_*.py).
+# These are NOT the same thing. If you don't need the .json files,
+# do not run this script.
+#
+# All outbound HTTP goes through glfm.utils.safe_http (vendored from SHL).
 #
 
 import argparse
@@ -22,175 +24,303 @@ import os
 import urllib.request
 from pathlib import Path
 
+from glfm.errors import DataError, OperationalError
 from glfm.paths import get_data_dir
+from glfm.utils.safe_http import safe_urlopen
+from glfm.utils.safe_http_common import (
+    SafeHTTPError,
+    read_limited_response,
+)
 
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = get_data_dir()
+# Upper bound per download (safety net against runaway responses).
+MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
-ISO1_OUT = DATA_ROOT / "iso_639_1.json"
-ISO2_OUT = DATA_ROOT / "iso_639_2.json"
-ISO3_OUT = DATA_ROOT / "iso_639_3.json"
-
-ISO_639_3_URL = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
-ISO_639_2_URL = "https://www.loc.gov/standards/iso639-2/ISO-639-2_utf-8.txt"
-ISO_639_1_URL = "https://datahub.io/core/language-codes/r/language-codes.csv"
+# Fallback for ISO 639-3 (SIL occasionally blocks requests).
+ISO_639_3_FALLBACK = (
+    "https://raw.githubusercontent.com/haliaeetus/iso-639/"
+    "master/data/iso-639-3.tab"
+)
 
 
-def download(url: str, path: Path, timeout: int = 60) -> None:
-    """Lataa tiedoston, käyttää fallback-mirroria ISO 639-3:lle."""
-    log.info("Ladataan: %s", url)
-
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "glfm/1.0.2 (https://codeberg.org/lahtis/GLFM)"},
+def _safe_http_to_operational(
+    exc: SafeHTTPError,
+    source: str,
+) -> OperationalError:
+    """Translate SafeHTTPError into a user-facing OperationalError."""
+    retryable = (
+        exc.kind in ("timeout", "transport")
+        or (
+            exc.status_code is not None
+            and exc.status_code in (429, 500, 502, 503, 504)
+        )
+    )
+    return OperationalError(
+        str(exc),
+        source=source,
+        kind=exc.kind,
+        status_code=exc.status_code,
+        temporary=retryable,
+        retryable=retryable,
     )
 
+
+def _fetch_bytes(
+    url: str,
+    user_agent: str,
+    timeout: int,
+    source: str,
+) -> bytes:
+    """Fetch a URL via safe_urlopen and return its bytes."""
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": user_agent},
+    )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            data = response.read()
-        path.write_bytes(data)
-        log.info("Tallennettu: %s (%.1f kt)", path, len(data) / 1024)
-        return
-    except Exception as e:
-        log.warning("Ensisijainen lataus epäonnistui: %s", e)
+        with safe_urlopen(req, timeout=timeout) as resp:
+            return read_limited_response(resp, MAX_DOWNLOAD_BYTES)
+    except SafeHTTPError as exc:
+        raise _safe_http_to_operational(exc, source=source) from exc
 
-    if "iso-639-3.tab" in url:
-        fallback_url = (
-            "https://raw.githubusercontent.com/haliaeetus/iso-639/"
-            "master/data/iso-639-3.tab"
-        )
-        log.info("Kokeillaan fallback-mirroria: %s", fallback_url)
-        req2 = urllib.request.Request(
-            fallback_url, headers={"User-Agent": "glfm/1.0.2"}
-        )
-        with urllib.request.urlopen(req2, timeout=timeout) as response:
-            data = response.read()
-        path.write_bytes(data)
-        log.info("Tallennettu fallbackista: %s", path)
-        return
 
-    raise RuntimeError(f"Lataus epäonnistui: {url}")
+def download(
+    url: str,
+    path: Path,
+    user_agent: str,
+    timeout: int = 60,
+    source: str = "",
+) -> None:
+    """Download a file, with an ISO 639-3 fallback mirror."""
+    log.info("Downloading: %s", url)
+
+    try:
+        data = _fetch_bytes(url, user_agent, timeout, source)
+    except OperationalError as e:
+        log.warning("Primary download failed: %s", e)
+        if "iso-639-3.tab" not in url:
+            raise
+
+        log.info("Trying fallback mirror: %s", ISO_639_3_FALLBACK)
+        data = _fetch_bytes(
+            ISO_639_3_FALLBACK, user_agent, timeout, source
+        )
+        log.info("Downloaded from fallback: %s", path)
+
+    try:
+        path.write_bytes(data)
+    except OSError as e:
+        raise OperationalError(
+            f"Could not write {path}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
+
+    log.info("Saved: %s (%.1f kB)", path, len(data) / 1024)
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
-        f.flush()
-        os.fsync(f.fileno())
-    tmp.replace(path)
+    """Atomic JSON write with human-readable formatting."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(
+                data, f,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(path)
+    except OSError as e:
+        raise OperationalError(
+            f"Could not write {path}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
 
 
-def build_iso_639_3() -> None:
-    """Rakentaa iso_639_3.json SIL:n .tab-tiedostosta."""
-    tmp = DATA_ROOT / "iso-639-3.tab"
-    download(ISO_639_3_URL, tmp)
+def build_iso_639_3(
+    data_root: Path,
+    url: str,
+    user_agent: str,
+    timeout: int,
+) -> None:
+    """Build iso_639_3.json from SIL's .tab file."""
+    tmp = data_root / "iso-639-3.tab"
+    download(
+        url, tmp, user_agent, timeout,
+        source="iso_639_3",
+    )
 
     iso3: dict = {}
-    with open(tmp, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            code3 = (row.get("Id") or "").strip()
-            if not code3:
-                continue
+    try:
+        with open(tmp, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            for row in reader:
+                code3 = (row.get("Id") or "").strip()
+                if not code3:
+                    continue
 
-            iso2B = (row.get("Part2_B") or row.get("Part2B") or "").strip()
-            iso2T = (row.get("Part2_T") or row.get("Part2T") or "").strip()
-            iso1 = (row.get("Part1") or "").strip()
+                iso2B = (
+                    row.get("Part2_B") or row.get("Part2B") or ""
+                ).strip()
+                iso2T = (
+                    row.get("Part2_T") or row.get("Part2T") or ""
+                ).strip()
+                iso1 = (row.get("Part1") or "").strip()
 
-            iso3[code3] = {
-                "name": (row.get("Ref_Name") or "").strip(),
-                "iso639_3": code3,
-                "iso639_2B": iso2B,
-                "iso639_2T": iso2T,
-                "iso639_1": iso1,
-                "iso639_5": "",
-            }
+                iso3[code3] = {
+                    "name": (row.get("Ref_Name") or "").strip(),
+                    "iso639_3": code3,
+                    "iso639_2B": iso2B,
+                    "iso639_2T": iso2T,
+                    "iso639_1": iso1,
+                    "iso639_5": "",
+                }
+    except (OSError, csv.Error) as e:
+        raise DataError(
+            f"Could not parse {tmp}: {e}",
+            source="iso_639_3",
+        ) from e
 
-    _atomic_write_json(ISO3_OUT, iso3)
-    log.info("Rakennettu: %s (%d kieltä)", ISO3_OUT, len(iso3))
+    _atomic_write_json(data_root / "iso_639_3.json", iso3)
+    log.info(
+        "Built: %s (%d languages)",
+        data_root / "iso_639_3.json", len(iso3),
+    )
 
 
-def build_iso_639_2() -> None:
-    """Rakentaa iso_639_2.json Library of Congressin listasta."""
-    tmp = DATA_ROOT / "iso-639-2.txt"
-    download(ISO_639_2_URL, tmp)
+def build_iso_639_2(
+    data_root: Path,
+    url: str,
+    user_agent: str,
+    timeout: int,
+) -> None:
+    """Build iso_639_2.json from the Library of Congress list."""
+    tmp = data_root / "iso-639-2.txt"
+    download(
+        url, tmp, user_agent, timeout,
+        source="iso_639_2",
+    )
 
     iso2: dict = {}
-    with open(tmp, "r", encoding="utf-8") as f:
-        for line in f:
-            parts = line.strip().split("|")
-            if len(parts) < 4:
-                continue
+    try:
+        with open(tmp, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split("|")
+                if len(parts) < 4:
+                    continue
 
-            code2B, code2T, code1, name = [p.strip() for p in parts[:4]]
-            key = code2T or code2B
-            if not key:
-                continue
+                code2B, code2T, code1, name = [
+                    p.strip() for p in parts[:4]
+                ]
+                key = code2T or code2B
+                if not key:
+                    continue
 
-            iso2[key] = {
-                "name": name,
-                "iso639_2B": code2B,
-                "iso639_2T": code2T,
-                "iso639_1": code1,
-                "iso639_3": "",
-            }
+                iso2[key] = {
+                    "name": name,
+                    "iso639_2B": code2B,
+                    "iso639_2T": code2T,
+                    "iso639_1": code1,
+                    "iso639_3": "",
+                }
+    except OSError as e:
+        raise DataError(
+            f"Could not parse {tmp}: {e}",
+            source="iso_639_2",
+        ) from e
 
-    _atomic_write_json(ISO2_OUT, iso2)
-    log.info("Rakennettu: %s (%d kieltä)", ISO2_OUT, len(iso2))
+    _atomic_write_json(data_root / "iso_639_2.json", iso2)
+    log.info(
+        "Built: %s (%d languages)",
+        data_root / "iso_639_2.json", len(iso2),
+    )
 
 
-def build_iso_639_1() -> None:
-    """Rakentaa iso_639_1.json DataHubin CSV:stä."""
-    tmp = DATA_ROOT / "language-codes.csv"
-    download(ISO_639_1_URL, tmp)
+def build_iso_639_1(
+    data_root: Path,
+    url: str,
+    user_agent: str,
+    timeout: int,
+) -> None:
+    """Build iso_639_1.json from the DataHub CSV."""
+    tmp = data_root / "language-codes.csv"
+    download(
+        url, tmp, user_agent, timeout,
+        source="iso_639_1",
+    )
 
     iso1: dict = {}
-    with open(tmp, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            code1 = (
-                row.get("alpha2") or row.get("Alpha2")
-                or row.get("ISO639-1") or ""
-            ).strip()
-            if not code1:
-                continue
+    try:
+        with open(tmp, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                code1 = (
+                    row.get("alpha2") or row.get("Alpha2")
+                    or row.get("ISO639-1") or ""
+                ).strip()
+                if not code1:
+                    continue
 
-            code3 = (
-                row.get("alpha3-b") or row.get("alpha3")
-                or row.get("Alpha3") or row.get("ISO639-2B")
-                or row.get("ISO639-3") or ""
-            ).strip()
-            name = (
-                row.get("English") or row.get("Name")
-                or row.get("name") or ""
-            ).strip()
+                code3 = (
+                    row.get("alpha3-b") or row.get("alpha3")
+                    or row.get("Alpha3") or row.get("ISO639-2B")
+                    or row.get("ISO639-3") or ""
+                ).strip()
+                name = (
+                    row.get("English") or row.get("Name")
+                    or row.get("name") or ""
+                ).strip()
 
-            iso1[code1] = {
-                "name": name,
-                "iso639_1": code1,
-                "iso639_3": code3,
-            }
+                iso1[code1] = {
+                    "name": name,
+                    "iso639_1": code1,
+                    "iso639_3": code3,
+                }
+    except (OSError, csv.Error) as e:
+        raise DataError(
+            f"Could not parse {tmp}: {e}",
+            source="iso_639_1",
+        ) from e
 
-    _atomic_write_json(ISO1_OUT, iso1)
-    log.info("Rakennettu: %s (%d kieltä)", ISO1_OUT, len(iso1))
+    _atomic_write_json(data_root / "iso_639_1.json", iso1)
+    log.info(
+        "Built: %s (%d languages)",
+        data_root / "iso_639_1.json", len(iso1),
+    )
 
 
-def main():
+def _read_source_url(config: dict, key: str) -> str:
+    """Read a source URL from config, or raise OperationalError."""
+    sources = config.get("sources", {})
+    entry = sources.get(key, {})
+    url = entry.get("url")
+    if not url:
+        raise OperationalError(
+            f"Config: sources.{key}.url is missing. "
+            f"Check config.toml or GLFM_ISO_{key.upper()}_URL.",
+            source=key,
+            kind="invalid_response",
+        )
+    return url
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Lataa ja rakenna ISO 639 JSON-tiedostot (redundantti).",
+        description="Download and build ISO 639 JSON files (redundant).",
     )
     parser.add_argument(
-        "--skip-iso3", action="store_true", help="Ohita ISO 639-3"
+        "--skip-iso3", action="store_true", help="Skip ISO 639-3"
     )
     parser.add_argument(
-        "--skip-iso2", action="store_true", help="Ohita ISO 639-2"
+        "--skip-iso2", action="store_true", help="Skip ISO 639-2"
     )
     parser.add_argument(
-        "--skip-iso1", action="store_true", help="Ohita ISO 639-1"
+        "--skip-iso1", action="store_true", help="Skip ISO 639-1"
     )
     args = parser.parse_args()
 
@@ -199,15 +329,52 @@ def main():
         format="%(levelname)s %(message)s",
     )
 
-    log.info("=== Rakennetaan ISO 639 JSON-tiedostot ===")
-    if not args.skip_iso3:
-        build_iso_639_3()
-    if not args.skip_iso2:
-        build_iso_639_2()
-    if not args.skip_iso1:
-        build_iso_639_1()
-    log.info("=== Valmis ===")
+    from glfm.config import load_config
+
+    config = load_config()
+    http = config.get("http", {})
+    user_agent = http.get(
+        "user_agent", "GLFM/1.1.0 (https://codeberg.org/lahtis/GLFM)"
+    )
+    timeout = http.get("timeout", 60)
+
+    data_root = get_data_dir()
+
+    log.info("=== Building ISO 639 JSON files ===")
+    try:
+        if not args.skip_iso3:
+            build_iso_639_3(
+                data_root,
+                _read_source_url(config, "iso_639_3"),
+                user_agent,
+                timeout,
+            )
+        if not args.skip_iso2:
+            build_iso_639_2(
+                data_root,
+                _read_source_url(config, "iso_639_2"),
+                user_agent,
+                timeout,
+            )
+        if not args.skip_iso1:
+            build_iso_639_1(
+                data_root,
+                _read_source_url(config, "iso_639_1"),
+                user_agent,
+                timeout,
+            )
+    except OperationalError as exc:
+        log.error("Source error: %s", exc)
+        if exc.retryable:
+            log.error("Error is temporary — try again later.")
+        return 1
+    except DataError as exc:
+        log.error("Data error: %s", exc)
+        return 1
+
+    log.info("=== Done ===")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

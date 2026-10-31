@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -11,41 +11,42 @@
 
 import json
 import logging
-from pathlib import Path
+from typing import Any, Dict
 
 from glfm.paths import get_bundled_data_dir
-from typing import Any, Dict
 
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA = get_bundled_data_dir() / "override_scripts.json"
-
 
 def load_override_scripts() -> Dict[str, Any]:
-    """
-    Lataa manuaaliset skriptiohjitukset (data/override_scripts.json).
+    """Load manual script overrides (data/override_scripts.json).
 
-    Tiedosto on valinnainen – jos se puuttuu, palautetaan tyhjä dict.
-    Palautettu rakenne:
+    The file is optional - if missing, an empty dict is returned.
+    Structure:
         {"grc": ["Grek", "Linb"], "lat": ["Latn"], ...}
     """
-    if not DATA.exists():
-        log.info("override_scripts.json puuttuu (%s) – käytetään tyhjiä",
-                 DATA)
+    data_path = get_bundled_data_dir() / "override_scripts.json"
+
+    if not data_path.exists():
+        log.info(
+            "override_scripts.json missing (%s) - using empty",
+            data_path,
+        )
         return {}
 
     try:
-        with DATA.open("r", encoding="utf-8") as f:
+        with data_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
     except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
-        log.warning("override_scripts.json ei luettavissa: %s", e)
+        log.warning("Could not read override_scripts.json: %s", e)
         return {}
 
     if not isinstance(data, dict):
-        log.warning("override_scripts.json ei ole dict (%s) – ohitetaan",
-                    type(data).__name__)
+        log.warning(
+            "override_scripts.json is not a dict (%s) - skipping",
+            type(data).__name__,
+        )
         return {}
 
-    log.info("Ladattu %d skriptiohjitusta", len(data))
+    log.info("Loaded %d script overrides", len(data))
     return data

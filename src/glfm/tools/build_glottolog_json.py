@@ -3,57 +3,76 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.4
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
 #
-# Hakee Glottolog-metadatan Wikidata SPARQL:lla.
-# Vaihtoehtoinen lähde: paikallinen languoids.json tai languoids/tree/.
+# Fetch Glottolog metadata via Wikidata SPARQL.
+# Alternative source: local languoids.json or languoids/tree/.
 #
-# Tulos: data/glottolog.json, avaimena ISO 639-3 -koodi (esim. "fin").
-# Glottocode on kenttänä, ei avaimena.
+# Output: data/glottolog.json, keyed by ISO 639-3 code (e.g. "fin").
+# Glottocode is a field, not a key.
 #
-# Wikidata-endpoint, User-Agent ja timeout luetaan configista.
+# Wikidata endpoint, User-Agent and timeout are read from config.
+# All outbound HTTP goes through glfm.utils.safe_http (vendored from SHL).
 #
 
 import argparse
 import json
 import logging
 import os
-import sys
 import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from glfm.config import load_config
+from glfm.errors import DataError, OperationalError
+from glfm.paths import get_data_dir
+from glfm.utils.safe_http import safe_urlopen
+from glfm.utils.safe_http_common import (
+    SafeHTTPError,
+    read_limited_response,
+)
+
 log = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# SPARQL responses for the full Glottolog can be a few MB.
+# 50 MB is a generous upper bound.
+MAX_SPARQL_RESPONSE_BYTES = 50 * 1024 * 1024
 
 
-def _setup_imports() -> None:
-    """Varmistaa että src/ on sys.path:ssä (kehitys)."""
-    src = PROJECT_ROOT / "src"
-    if src.exists() and str(src) not in sys.path:
-        sys.path.insert(0, str(src))
-
-
-_setup_imports()
-
-from glfm.config import load_config
-from glfm.paths import get_data_dir
-
-
-# --- Paikalliset lähteet (jos olemassa) ---
+# --- Local sources (if present) ---
 
 def load_from_languoids_json(path: Path) -> dict:
-    """Lukee paikallisen languoids.json-tiedoston."""
-    with open(path, "r", encoding="utf-8") as f:
-        raw = json.load(f)
+    """Read a local languoids.json file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except json.JSONDecodeError as e:
+        raise DataError(
+            f"Invalid JSON in {path}: {e}",
+            source="languoids.json",
+        ) from e
+    except OSError as e:
+        raise OperationalError(
+            f"Could not read {path}: {e}",
+            source="languoids.json",
+            kind="transport",
+        ) from e
+
+    if not isinstance(raw, list):
+        raise DataError(
+            f"Expected a JSON array in {path}, got {type(raw).__name__}",
+            source="languoids.json",
+        )
 
     result = {}
     for entry in raw:
+        if not isinstance(entry, dict):
+            continue
         iso3 = (entry.get("iso639_3") or entry.get("iso") or "").lower()
         if not iso3 or len(iso3) != 3:
             continue
@@ -71,7 +90,7 @@ def load_from_languoids_json(path: Path) -> dict:
 
 
 def load_from_tree(tree_path: Path) -> dict:
-    """Lukee Glottologin raakapuun (languoids/tree/)."""
+    """Read the raw Glottolog tree (languoids/tree/)."""
     result = {}
     for root, _dirs, files in os.walk(tree_path):
         if "md.ini" not in files:
@@ -80,30 +99,40 @@ def load_from_tree(tree_path: Path) -> dict:
         glotto = {}
         glottocode = None
         iso3 = None
-        with open(md_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("id ="):
-                    glottocode = line.split("=", 1)[1].strip()
-                elif line.startswith("iso639-3 ="):
-                    iso3 = line.split("=", 1)[1].strip().lower()
-                elif line.startswith("macroarea ="):
-                    glotto["macroarea"] = line.split("=", 1)[1].strip()
-                elif line.startswith("latitude ="):
-                    try:
-                        glotto["latitude"] = float(line.split("=", 1)[1].strip())
-                    except ValueError:
-                        glotto["latitude"] = None
-                elif line.startswith("longitude ="):
-                    try:
-                        glotto["longitude"] = float(line.split("=", 1)[1].strip())
-                    except ValueError:
-                        glotto["longitude"] = None
-                elif line.startswith("family ="):
-                    glotto["family"] = line.split("=", 1)[1].strip()
-                elif line.startswith("lineage ="):
-                    lineage = line.split("=", 1)[1].strip()
-                    glotto["lineage"] = [x.strip() for x in lineage.split(",")]
+        try:
+            with open(md_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("id ="):
+                        glottocode = line.split("=", 1)[1].strip()
+                    elif line.startswith("iso639-3 ="):
+                        iso3 = line.split("=", 1)[1].strip().lower()
+                    elif line.startswith("macroarea ="):
+                        glotto["macroarea"] = line.split("=", 1)[1].strip()
+                    elif line.startswith("latitude ="):
+                        try:
+                            glotto["latitude"] = float(
+                                line.split("=", 1)[1].strip()
+                            )
+                        except ValueError:
+                            glotto["latitude"] = None
+                    elif line.startswith("longitude ="):
+                        try:
+                            glotto["longitude"] = float(
+                                line.split("=", 1)[1].strip()
+                            )
+                        except ValueError:
+                            glotto["longitude"] = None
+                    elif line.startswith("family ="):
+                        glotto["family"] = line.split("=", 1)[1].strip()
+                    elif line.startswith("lineage ="):
+                        lineage = line.split("=", 1)[1].strip()
+                        glotto["lineage"] = [
+                            x.strip() for x in lineage.split(",")
+                        ]
+        except OSError as e:
+            log.warning("Could not read %s: %s", md_path, e)
+            continue
 
         if iso3 and len(iso3) == 3:
             result[iso3] = {
@@ -119,7 +148,7 @@ def load_from_tree(tree_path: Path) -> dict:
     return result
 
 
-# --- Wikidata SPARQL -lähde ---
+# --- Wikidata SPARQL source ---
 
 SPARQL_QUERY = """
 SELECT ?iso3 ?glottocode ?familyLabel ?macroareaLabel ?coord ?statusLabel WHERE {
@@ -142,56 +171,19 @@ SELECT ?iso3 ?glottocode ?familyLabel ?macroareaLabel ?coord ?statusLabel WHERE 
 """
 
 
-def fetch_from_wikidata(config: dict) -> dict:
-    """
-    Hakee Glottolog-metadatan Wikidata SPARQL:lla.
-
-    Endpoint, User-Agent ja timeout luetaan configista.
-    Palauttaa {iso3: {glottocode, iso639_3, macroarea, latitude,
-                       longitude, lineage, family, status}}
-    """
-    sources = config.get("sources", {})
-    wikidata = sources.get("wikidata", {})
-    endpoint = wikidata.get("endpoint")
-    if not endpoint:
-        raise RuntimeError(
-            "Config: sources.wikidata.endpoint puuttuu. "
-            "Tarkista config.toml tai GLFM_WIKIDATA_ENDPOINT."
-        )
-
-    http = config.get("http", {})
-    user_agent = http.get("user_agent", "glfm/1.0.4")
-    timeout = http.get("timeout", 60)
-
-    log.info("Haetaan Wikidata SPARQL: %s", endpoint)
-
-    params = {"query": SPARQL_QUERY, "format": "json"}
-    url = f"{endpoint}?{urllib.parse.urlencode(params)}"
-
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": user_agent,
-            "Accept": "application/sparql-results+json",
-        },
-    )
-
-    t0 = time.time()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-        raise RuntimeError(
-            f"Wikidata-kysely epäonnistui: {e}. "
-            f"Yritä myöhemmin uudelleen tai käytä paikallista lähdettä."
-        ) from e
-
-    elapsed = time.time() - t0
+def _parse_wikidata_rows(data: dict) -> dict:
+    """Convert SPARQL JSON bindings into {iso3: {...}}."""
     rows = data.get("results", {}).get("bindings", [])
-    log.info("Wikidata palautti %d riviä %.1f sekunnissa", len(rows), elapsed)
+    if not isinstance(rows, list):
+        raise DataError(
+            "SPARQL response has no 'results.bindings' array.",
+            source="wikidata",
+        )
 
     result: dict = {}
     for row in rows:
+        if not isinstance(row, dict):
+            continue
         iso3 = row.get("iso3", {}).get("value", "").lower()
         if not iso3 or len(iso3) != 3:
             continue
@@ -226,48 +218,157 @@ def fetch_from_wikidata(config: dict) -> dict:
     return result
 
 
-# --- Pääohjelma ---
+def _safe_http_to_operational(
+    exc: SafeHTTPError,
+    source: str,
+) -> OperationalError:
+    """Translate SafeHTTPError into a user-facing OperationalError."""
+    retryable = (
+        exc.kind in ("timeout", "transport")
+        or (
+            exc.status_code is not None
+            and exc.status_code in (429, 500, 502, 503, 504)
+        )
+    )
+    temporary = retryable
+
+    return OperationalError(
+        str(exc),
+        source=source,
+        kind=exc.kind,
+        status_code=exc.status_code,
+        temporary=temporary,
+        retryable=retryable,
+    )
+
+
+def fetch_from_wikidata(config: dict) -> dict:
+    """Fetch Glottolog metadata via Wikidata SPARQL.
+
+    Endpoint, User-Agent and timeout are read from config.
+    Returns {iso3: {glottocode, iso639_3, macroarea, latitude,
+                     longitude, lineage, family, status}}.
+    """
+    sources = config.get("sources", {})
+    wikidata = sources.get("wikidata", {})
+    endpoint = wikidata.get("endpoint")
+    if not endpoint:
+        raise OperationalError(
+            "Config: sources.wikidata.endpoint is missing. "
+            "Check config.toml or GLFM_WIKIDATA_ENDPOINT.",
+            source="wikidata",
+            kind="invalid_response",
+        )
+
+    http = config.get("http", {})
+    user_agent = http.get("user_agent", "GLFM/1.1.0")
+    timeout = http.get("timeout", 60)
+
+    log.info("Fetching Wikidata SPARQL: %s", endpoint)
+
+    params = {"query": SPARQL_QUERY, "format": "json"}
+    url = f"{endpoint}?{urllib.parse.urlencode(params)}"
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": user_agent,
+            "Accept": "application/sparql-results+json",
+        },
+    )
+
+    t0 = time.time()
+    try:
+        with safe_urlopen(req, timeout=timeout) as resp:
+            content_type = (
+                resp.headers.get("Content-Type") or ""
+            ).lower()
+            if not content_type.startswith(
+                "application/sparql-results+json"
+            ):
+                raise OperationalError(
+                    f"Unexpected Content-Type from Wikidata: "
+                    f"{content_type!r}",
+                    source="wikidata",
+                    kind="invalid_content_type",
+                    status_code=resp.status,
+                )
+            raw = read_limited_response(
+                resp, MAX_SPARQL_RESPONSE_BYTES
+            )
+    except SafeHTTPError as exc:
+        raise _safe_http_to_operational(exc, source="wikidata") from exc
+
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise DataError(
+            f"Wikidata returned invalid JSON: {exc}",
+            source="wikidata",
+        ) from exc
+
+    elapsed = time.time() - t0
+    rows = data.get("results", {}).get("bindings", [])
+    log.info(
+        "Wikidata returned %d rows in %.1f seconds",
+        len(rows),
+        elapsed,
+    )
+
+    return _parse_wikidata_rows(data)
+
+
+# --- Main ---
 
 def build_glottolog(config: dict, force_wikidata: bool = False) -> dict:
-    """Rakentaa glottolog.json-datan (ei kirjoita tiedostoa)."""
+    """Build glottolog.json data (does not write the file)."""
     data_dir = get_data_dir()
     languoids_json = data_dir / "languoids.json"
     languoids_tree = data_dir / "languoids" / "tree"
 
     if not force_wikidata and languoids_json.exists():
-        log.info("Käytetään paikallista lähdettä: %s", languoids_json)
+        log.info("Using local source: %s", languoids_json)
         return load_from_languoids_json(languoids_json)
 
     if not force_wikidata and languoids_tree.exists():
-        log.info("Käytetään paikallista lähdettä: %s", languoids_tree)
+        log.info("Using local source: %s", languoids_tree)
         return load_from_tree(languoids_tree)
 
-    log.info("Ei paikallista lähdettä – haetaan Wikidata SPARQL:lla")
+    log.info("No local source — fetching via Wikidata SPARQL")
     return fetch_from_wikidata(config)
 
 
 def save_json(path: Path, data: dict) -> None:
-    """Atominen JSON-kirjoitus."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-        f.flush()
-        os.fsync(f.fileno())
-    tmp.replace(path)
+    """Atomic JSON write."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(
+                data, f, ensure_ascii=False, separators=(",", ":")
+            )
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(path)
+    except OSError as e:
+        raise OperationalError(
+            f"Could not write {path}: {e}",
+            source="filesystem",
+            kind="transport",
+        ) from e
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Rakenna glottolog.json Wikidata SPARQL:lla.",
+        description="Build glottolog.json via Wikidata SPARQL.",
     )
     parser.add_argument(
         "--wikidata", action="store_true",
-        help="Pakota Wikidata-lähde (ohita paikallinen data)",
+        help="Force Wikidata source (skip local data)",
     )
     parser.add_argument(
         "--output", type=Path, default=None,
-        help="Tulostiedosto (oletus: <data_dir>/glottolog.json)",
+        help="Output file (default: <data_dir>/glottolog.json)",
     )
     args = parser.parse_args()
 
@@ -278,21 +379,27 @@ def main():
 
     config = load_config()
     data_dir = get_data_dir()
-
     output = args.output or (data_dir / "glottolog.json")
 
-    log.info("Data-hakemisto: %s", data_dir)
+    log.info("Data directory: %s", data_dir)
 
     try:
-        data = build_glottolog(config, force_wikidata=args.wikidata)
-    except RuntimeError as e:
-        log.error("%s", e)
+        data = build_glottolog(
+            config, force_wikidata=args.wikidata
+        )
+    except OperationalError as exc:
+        log.error("Source error: %s", exc)
+        if exc.retryable:
+            log.error("Error is temporary — try again later.")
+        return 1
+    except DataError as exc:
+        log.error("Data error: %s", exc)
         return 1
 
     save_json(output, data)
 
     log.info(
-        "Tallennettu: %s (%d kieltä, %.1f kt)",
+        "Saved: %s (%d languages, %.1f kB)",
         output, len(data), output.stat().st_size / 1024,
     )
     return 0

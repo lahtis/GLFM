@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -15,13 +15,12 @@ log = logging.getLogger(__name__)
 
 
 def decide_fallback(lang_id: str, wikt: dict | None) -> str:
-    """
-    Fallback-logiikka:
+    """Fallback logic:
 
-    1. Jos Wiktionary määrittää parent-kielen → käytä sitä
-    2. Muuten fallback on kieli itse
+    1. If Wiktionary defines a parent language -> use it
+    2. Otherwise fallback is the language itself
 
-    Palauttaa aina kelvollisen kielikoodin (ei tyhjää).
+    Always returns a valid language code (never empty).
     """
     if not isinstance(wikt, dict):
         return lang_id

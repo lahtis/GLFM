@@ -1,18 +1,30 @@
-# glfm/_version.py
+# src/glfm/_version.py
+#
+# GLFM Project
+# Copyright (c) 2026 Tuomas Lähteenmäki
+# Version 1.1.0
+#
+# https://codeberg.org/lahtis/GLFM
+# Licensed under the MIT License.
+#
 """
-Yksi totuuden lähde versiolle.
+Single source of truth for the version.
 
-Käyttö:
+Usage:
     from glfm._version import __version__
     from glfm._version import __version_tuple__
 
-Versio noudattaa PEP 440 -standardia:
+The version follows PEP 440:
     MAJOR.MINOR.PATCH[.devN | .aN | .bN | .rcN]
 """
 
-__version__ = "1.0.7"
-__version_tuple__ = tuple(int(x) for x in __version__.split(".")[:3])
+import re
 
-# Valinnainen: git-commit, build-päivä (voi päivittää CI:ssä)
+__version__ = "1.1.0"
+__version_tuple__ = tuple(
+    int(x) for x in re.findall(r"\d+", __version__)[:3]
+)
+
+# Optional: git commit, build date (can be updated in CI)
 __build_date__ = "2026-10-31"
 __git_commit__ = "unknown"

@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.0.2
+# Version 1.1.0
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -17,16 +17,16 @@ from typing import Any, Dict, List
 class Language:
     """Unified language model used by the pipeline.
 
-    Kaikki kentät ovat datavetoisia ja tulevat ISO/Wiktionary/CLDR/
-    Written/Glottolog/POS-lähteistä.
+    All fields are data-driven and come from ISO / Wiktionary / CLDR /
+    Written / Glottolog / POS sources.
     """
 
-    # Perustunnisteet
+    # Base identifiers
     id: str
     name: str
     official_name: str
 
-    # ISO-koodit
+    # ISO codes
     iso639_1: str = ""
     iso639_2B: str = ""
     iso639_2T: str = ""
@@ -39,20 +39,20 @@ class Language:
     #   H = Historical
     #   A = Ancient
     #   C = Constructed
-    #   "" = tuntematon
+    #   "" = unknown
     language_type: str = ""
 
-    # Oletusskripti ja -alue
+    # Default script and region
     default_script: str = ""
     default_region: str = ""
 
-    # BCP-47 tagi
+    # BCP-47 tag
     bcp47: str = ""
 
-    # Fallback-kieli (murre → emo)
+    # Fallback language (dialect -> parent)
     fallback: str = ""
 
-    # UralicNLP-tuki
+    # UralicNLP support
     uralicNLP: bool = False
 
     # Written-languages metadata
@@ -61,12 +61,15 @@ class Language:
     glottocode: str = ""
     family: str = ""
 
-    # Glottolog-data
+    # Glottolog data
     glottolog: Dict[str, Any] = field(default_factory=dict)
 
-    # POS-tilastot
+    # POS statistics
     pos_stats: Dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Palauttaa datan puhdistettuna JSON-yhteensopivana dictinä."""
+        """Return the dataclass as a JSON-compatible dict.
+
+        Alias for dataclasses.asdict(self).
+        """
         return asdict(self)

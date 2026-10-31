@@ -4,7 +4,7 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 
 - **Author:** Tuomas Lähteenmäki  
 - **License:** MIT  
-- **Version:** 1.0.7
+- **Version:** 1.1.0
 
 > **Beta:** GLFM is in beta. The data format and config structure may change before 1.0.0 stable. See [CHANGELOG.md](CHANGELOG.md) for details.
 
@@ -28,8 +28,6 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 
 ## Features
 
-## Features
-
 - **7,900+ Languages:** Unified from ISO 639-1/2/3/5, Wikidata (Glottolog), CLDR, and POS statistics.  
 - **Nearest Language Neighbors:** Each written language includes typologically nearest languages based on URIEL/lang2vec features (syntax, phonology, inventory, family).  
 - **Accurate BCP-47 Tags:** Language, script, and region combined automatically.  
@@ -38,7 +36,7 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 - **Validation Pipeline:** Full automated checks for ISO consistency, BCP-47 compliance, fallback correctness, POS stats, and Glottolog data.  
 - **Checkpoint/Resume Support:** Long-running nearest-language computations can be resumed automatically from a checkpoint.  
 - **Config Versioning:** `config.toml` carries a `config_version` key, separate from the package version.  
-- **Optional POS Statistics:** Compute POS statistics from Wiktextract (5–10 GB) with `--with-pos`.
+- **Optional POS Statistics:** Compute POS statistics from Wiktextract (~3 GB) with `--with-pos`.
 
 ---
 
@@ -48,8 +46,9 @@ GLFM/
 ├── pyproject.toml
 ├── config.toml                    # Default configuration
 ├── README.md
-├── LICENCE
+├── LICENSE
 ├── CHANGELOG.md                   # Version history
+├── VENDORED.md 
 ├── output/                        # Pipeline outputs (.gitignore)
 │   ├── unified/                   # unified_languages.json, languages_top20.json.gz
 │   ├── validation/                # validation_report.md/html, errors
@@ -66,12 +65,13 @@ GLFM/
 │       ├── data/                  # Internal data (packaged)
 │       │   ├── override_scripts.json
 │       │   └── uralic_languages.json
+│       ├── utils/                 # Vendored safe HTTP layer
 │       ├── loaders/               # Data source loaders
 │       ├── logic/                 # Logic (script, region, fallback, BCP-47)
 │       ├── models/                # Data models (Language)
 │       └── tools/                 # Validators, reports, helper scripts
-│           ├── compute_pos_stats.py       # POS statistics (optional)
-│           ├── download_wiktextract.py    # Wiktextract download (5-10 GB)
+│           ├── build_pos_stats.py         # POS statistics (optional)
+│           ├── download_wiktextract.py    # Wiktextract download (~3 GB)
 └── venv/
 ```
 
@@ -79,7 +79,7 @@ GLFM/
 
 > `download` and `pos_stats` are **not** part of the default pipeline.
 > - `download`: use `python3 -m glfm.download --tier consumer|research` separately.
-> - `pos_stats`: use `--with-pos` (requires 5–10 GB raw data).
+> - `pos_stats`: use `--with-pos` (requires ~3 GB raw data).
 
 ---
 
@@ -179,7 +179,7 @@ generate ISO → build glottolog → build unified → compute nearest → build
 ```bash
 python3 -m glfm.run_full_pipeline
 ```
-# Include POS statistics (requires 5-10 GB raw Wiktextract data)
+# Include POS statistics (requires ~3 GB raw Wiktextract data)
 ```bash
 python3 -m glfm.run_full_pipeline --with-pos
 ```
@@ -212,11 +212,11 @@ python3 -m glfm.run_full_pipeline --help
 `config.toml` (repo root) contains default values. Users can override:
 
 - `~/.config/glfm/config.toml`  
-- Environment variables: `GLFM_DATA_DIR`, `GLFM_CACHE_DIR`, `GLFM_OUTPUT_DIR`, `GLFM_ISO_639_3_URL`, etc.
+- Environment variables: `GLFM_CACHE_DIR`, `GLFM_OUTPUT_DIR`, `GLFM_ISO_639_3_URL`, etc.
 
 Example:
 ```toml
-config_version = 2
+config_version = 3
 
 [sources.iso_639_3]
 
@@ -231,7 +231,7 @@ version  = "48.0.0"
 endpoint = "https://query.wikidata.org/sparql"
 
 [sources.wiktextract]
-url = "https://dumps.wikimedia.org/other/wiktextract/20260101/wiktextract-data.jsonl.gz"
+url = "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz"
 filename = "raw-wiktextract-data.jsonl.gz"
 timeout = 3600
 

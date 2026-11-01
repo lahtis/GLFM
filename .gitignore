@@ -1,4 +1,4 @@
-# Output (generoidaan)
+# Output (generated)
 /output/
 
 # Python
@@ -13,6 +13,17 @@ build/
 # Venv
 venv/
 .venv/
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Temporary files (atomic writes)
+*.tmp
+*.log
 
 # IDE
 .vscode/

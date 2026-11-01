@@ -1,5 +1,16 @@
 # tests/utils/test_safe_http_glfm.py
-"""GLFM-specific smoke tests for vendored safe_http."""
+#
+# GLFM Project
+# Copyright (c) 2026 Tuomas Lähteenmäki
+# Version 1.1.0
+#
+# https://codeberg.org/lahtis/GLFM
+# Licensed under the MIT License.
+#
+# GLFM-specific smoke tests for the vendored safe_http layer.
+#
+
+import urllib.request
 
 import pytest
 
@@ -8,6 +19,8 @@ from glfm.utils.safe_http_common import SafeHTTPError
 
 
 class TestSafeHttpGlfm:
+    """GLFM-specific smoke tests for safe_http."""
+
     def test_rejects_http_scheme(self) -> None:
         with pytest.raises(SafeHTTPError) as exc_info:
             safe_urlopen("http://example.com/")
@@ -33,6 +46,12 @@ class TestSafeHttpGlfm:
         monkeypatch.setattr(
             "glfm.utils.safe_http._opener.open", fake_open
         )
+
+        req = urllib.request.Request(
+            "https://query.wikidata.org/sparql",
+            headers={"User-Agent": "glfm test"},
+        )
         with pytest.raises(SafeHTTPError):
-            safe_urlopen("https://query.wikidata.org/sparql")
-        assert captured["ua"].startswith("glfm/")
+            safe_urlopen(req)
+
+        assert captured["ua"] == "glfm test"

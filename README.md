@@ -4,7 +4,7 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 
 - **Author:** Tuomas Lähteenmäki  
 - **License:** MIT  
-- **Version:** 1.1.0
+- **Version:** 1.1.1
 
 > **Beta:** GLFM is in beta. The data format and config structure may change before 1.0.0 stable. See [CHANGELOG.md](CHANGELOG.md) for details.
 

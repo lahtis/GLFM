@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.1.0
+# Version 1.1.1
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from glfm.errors import DataError, OperationalError
-from glfm.paths import get_data_dir
+from glfm.paths import get_bundled_data_dir, get_data_dir
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +103,9 @@ def generate_report() -> None:
     validation_errors_json = (
         output_root / "validation" / "validation_errors.json"
     )
-    uralic_file = output_root / "uralic_languages.json"
+    # uralic_languages.json is bundled with the package, not in the
+    # data directory.
+    uralic_file = get_bundled_data_dir() / "uralic_languages.json"
 
     timestamp = datetime.now(timezone.utc).strftime(
         "%Y-%m-%d %H:%M:%S UTC"

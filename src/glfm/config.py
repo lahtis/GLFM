@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.1.0
+# Version 1.1.3
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 #       (url, filename, timeout); download URLs -> v1.0.7
 #   3 — added sources.iso_639_2 and sources.iso_639_1 (url);
 #       env vars GLFM_ISO_639_2_URL, GLFM_ISO_639_1_URL
-CONFIG_VERSION = 3
+CONFIG_VERSION = 4
 
 # Default configuration — overridden by config.toml and env vars
 DEFAULT_CONFIG = {
@@ -98,7 +98,7 @@ DEFAULT_CONFIG = {
                 "https://codeberg.org/lahtis/GLFM/releases/download/"
                 "v.1.0.7/languages_top20.json.gz"
             ),
-            "sha256": "98cba1e143e48efdc95f62b1f138bec60d588e3ea37b2a6326ed4e8ea93a9abe",
+            "sha256": "",
             "size_kt": 558,
             "timeout": 300,
             "mirrors": {
@@ -113,7 +113,7 @@ DEFAULT_CONFIG = {
                 "https://codeberg.org/lahtis/GLFM/releases/download/"
                 "v.1.0.7/unified_languages.json.gz"
             ),
-            "sha256": "be1424f5dd948e19fba2dfa65683478491f796f0dec9d0d55d7d0afb432a9a30",
+            "sha256": "",
             "size_mb": 1.4,
             "timeout": 300,
             "mirrors": {

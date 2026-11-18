@@ -2,7 +2,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.1.0
+# Version 1.1.2
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -20,11 +20,11 @@ The version follows PEP 440:
 
 import re
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 __version_tuple__ = tuple(
     int(x) for x in re.findall(r"\d+", __version__)[:3]
 )
 
 # Optional: git commit, build date (can be updated in CI)
-__build_date__ = "2026-11-01"
+__build_date__ = "2026-11-18"
 __git_commit__ = "unknown"

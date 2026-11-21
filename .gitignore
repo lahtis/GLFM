@@ -24,7 +24,6 @@ htmlcov/
 # Temporary files (atomic writes)
 *.tmp
 *.log
-RELEASE_NOTES_v1.2.0.md
 
 # IDE
 .vscode/

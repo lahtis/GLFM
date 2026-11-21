@@ -5,9 +5,9 @@ consumer dataset and expanded ISO 639-5 and Glottolog metadata.
 
 ### Files
 
-- `languages_top20.json.gz` (~1.1 MB) — consumer dataset, 6,554 languages,
+- `languages_top20.json.gz` (1,104.3 kB) — consumer dataset, 6,554 languages,
   up to 20 nearest-language neighbors
-- `unified_languages.json.gz` (~2.5 MB) — research dataset, 7,928 languages,
+- `unified_languages.json.gz` (2,528.4 kB) — research dataset, 7,928 languages,
   up to 100 nearest-language neighbors
 
 ### Changes
@@ -26,6 +26,9 @@ consumer dataset and expanded ISO 639-5 and Glottolog metadata.
   language; also configurable with `[nearest].max_neighbors`
 - Add `[nearest].matrix_chunk_size` and
   `GLFM_NEAREST_MATRIX_CHUNK_SIZE`; bump `config_version` to 7
+- Change `family` to the Glottolog top-level family name. For Finnish
+  (`fin`), this changes the value from `Finnic` to `Uralic`; this is a
+  breaking change for consumers that relied on the previous narrower value
 - Set default download SHA-256 values to empty; warn that older user configs
   may need their old `sha256` entries removed or cleared
 - Pin `setuptools<80.9` in the `data` extra to avoid the `pkg_resources`
@@ -37,8 +40,20 @@ consumer dataset and expanded ISO 639-5 and Glottolog metadata.
   entries across 3,709 languages with URIEL features
 - `languages_top20.json.gz`: 6,554 languages; 70,480 nearest-language
   entries across 3,524 languages with URIEL features
+- 4,219 research-dataset languages have no nearest-language entries because
+  URIEL features are unavailable or the language is not in the written set
 - ISO 639-5 registry: 115 codes; assigned to 5,311 research-dataset
   languages and 4,581 consumer-dataset languages
+- Glottolog official source: 7,703 records, 7,654 lineages
+- Full pipeline on Debian 13 / Python 3.13.13 with 512 MB RAM: all 12 stages
+  completed in 35 s, with 290 MB maximum resident memory
+
+### Known limitations
+
+- Nearest-language lists are empty for languages without URIEL features or
+  for languages outside the written-language set.
+- The fallback graph is not generated when `wiktionary_languages.json` is
+  unavailable.
 
 ### Install
 
@@ -46,4 +61,9 @@ consumer dataset and expanded ISO 639-5 and Glottolog metadata.
 pip install glfm
 python3 -m glfm.download
 python3 -m glfm.download --tier research
+```
+For pipeline generation and nearest-language computation, install the data
+extra instead:
+```bash
+pip install "glfm[data]==1.2.0"
 ```

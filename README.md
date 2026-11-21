@@ -156,7 +156,7 @@ assigned a code to 5,311 of 7,928 languages.
 
 **Distance fields:**
 
-- `distance_type` is the distance method used (`syntax_knn` by default as of v1.0.7).
+- `distance_type` is the distance method used (`syntax_knn` by default).
   See the table below for available methods and their use cases.
 - `distance_source` is the upstream source of the distance computation (`lang2vec / URIEL`).
 - `distance_bases` lists the data sources used for the distance calculation.
@@ -337,7 +337,7 @@ with gzip.open(cache / "languages_top20.json.gz", "rt") as f:
 
 fin = languages["fin"]
 print(fin["bcp47"])                  # fi-Latn-FI
-print(fin["family"])                 # Finnic
+print(fin["family"])                 # Uralic
 print(fin["glottocode"])             # finn1318
 print(fin["nearest_languages"][:5])  # Top 5 nearest languages
 ```
@@ -354,7 +354,7 @@ with gzip.open(cache / "languages_top20.json.gz", "rt") as f:
 
 fin = languages["fin"]
 print(f"bcp47: {fin['bcp47']}")           # fi-Latn-FI
-print(f"family: {fin['family']}")         # Finnic
+print(f"family: {fin['family']}")         # Uralic
 print(f"glottocode: {fin['glottocode']}") # finn1318
 print(f"language_type: {fin['language_type']}")  # L
 print(f"neighbors: {len(fin['nearest_languages'])}")  # 20
@@ -428,6 +428,12 @@ If you only need the package and pre-built data:
 pip install glfm
 ```
 Then download the data (see Quick Start).
+
+To generate datasets or compute nearest-language data from sources, install
+the optional data dependencies:
+```bash
+pip install "glfm[data]"
+```
 
 ---
 

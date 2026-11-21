@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Breaking: `family` now reports the Glottolog top-level family.** For
+  example, Finnish (`fin`) now has `family = "Uralic"`; the previous value
+  was the narrower `"Finnic"`. Consumers that relied on the old meaning
+  should use the `glottolog` classification for detailed lineage data.
 - **`lang2vec` compatibility:** the `data` extra now pins
   `setuptools<80.9` because `lang2vec` imports `pkg_resources`, which
   emits a deprecation warning in setuptools 80.9 and newer.

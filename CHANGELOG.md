@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Set the PyPI development-status classifier to `Production/Stable` instead
+  of `Beta`.
 - Include `CHANGELOG.md` in the source distribution so README changelog links
   work on PyPI and the release history is available to source-package users.
 - Include the complete `tests/` Python test suite in the source distribution.

@@ -298,13 +298,18 @@ python3 -m glfm.run_full_pipeline --only generate glottolog
 
 ### 3. (Optional) Generate or rebuild the datasets
 
-Nearest-language computation requires the `data` extra. On memory-limited
-machines, skip that step with `--skip compute`; the resulting dataset will
-not include computed nearest-language lists.
+Nearest-language computation requires the `data` extra. It calculates
+pairwise distances in row chunks instead of keeping the full distance
+matrix in memory. Reduce the chunk size on memory-limited machines; progress
+is checkpointed so an interrupted run can resume:
 
 ```bash
-python3 -m glfm.run_full_pipeline
+python3 -m glfm.run_full_pipeline --matrix-chunk-size 16 --checkpoint-interval 100
 ```
+`--matrix-chunk-size` defaults to 128 rows. Smaller values reduce peak
+distance-matrix memory. `--checkpoint-interval` defaults to 1000 languages;
+smaller values save progress more often. Both options are also available
+when running `glfm.tools.compute_nearest_languages` directly.
 ### 4. Access data in Python
 
 ```python

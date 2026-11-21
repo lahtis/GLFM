@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Checkpoint interval CLI option:** `compute_nearest_languages` and the
+  full pipeline accept `--checkpoint-interval N` to choose how many
+  languages are processed between intermediate saves. Smaller values
+  save progress more often; the configured interval remains the default.
+- **Chunked nearest-language distances:** pairwise distances are computed
+  in bounded row chunks instead of allocating a full N×N matrix. Configure
+  the chunk size with `--matrix-chunk-size` or
+  `[nearest].matrix_chunk_size`; smaller values lower peak matrix memory.
 - **ISO 639-5 assignment:** the pipeline downloads Glottolog's compact
   Newick tree and languoid catalogue and follows each language's lineage
   to assign the nearest matching ISO 639-5 family/group code. If the

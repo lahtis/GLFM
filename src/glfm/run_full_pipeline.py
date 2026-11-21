@@ -268,6 +268,20 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--checkpoint-interval", type=int, default=None,
+        help=(
+            "For compute: save progress after this many languages "
+            "(defaults to [nearest].checkpoint_interval in config)."
+        ),
+    )
+    parser.add_argument(
+        "--matrix-chunk-size", type=int, default=None,
+        help=(
+            "For compute: number of language rows in each in-memory "
+            "distance block (smaller values use less memory)."
+        ),
+    )
+    parser.add_argument(
         "--list", action="store_true",
         help=(
             "List all available steps and exit (use --with-pos to "
@@ -275,6 +289,10 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    if args.checkpoint_interval is not None and args.checkpoint_interval < 1:
+        parser.error("--checkpoint-interval must be at least 1")
+    if args.matrix_chunk_size is not None and args.matrix_chunk_size < 1:
+        parser.error("--matrix-chunk-size must be at least 1")
 
     # Build the list of steps to run
     all_steps = list(STEPS)
@@ -344,6 +362,14 @@ def main() -> int:
     for key, title, module, kind in steps:
         timeout = TIMEOUTS.get(key, DEFAULT_TIMEOUT)
         extra_args = list(MODULE_ARGS.get(module, []))
+        if key == "compute" and args.checkpoint_interval is not None:
+            extra_args.extend([
+                "--checkpoint-interval", str(args.checkpoint_interval)
+            ])
+        if key == "compute" and args.matrix_chunk_size is not None:
+            extra_args.extend([
+                "--matrix-chunk-size", str(args.matrix_chunk_size)
+            ])
 
         ok = run_step(title, module, timeout, extra_args)
 

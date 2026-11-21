@@ -4,7 +4,7 @@
 # config_version tracks the structure of DEFAULT_CONFIG in config.py.
 # Bump it when the structure changes (not on every package release).
 
-config_version = 4
+config_version = 7
 
 [sources.iso_639_3]
 url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3.tab"
@@ -71,6 +71,7 @@ distance_type = "syntax_knn"
 max_neighbors = 100
 decimals = [4, 6]
 checkpoint_interval = 1000
+matrix_chunk_size = 128
 
 [http]
 # user_agent is built from __version__ in config.py — do not override here.

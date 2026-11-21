@@ -33,7 +33,8 @@ log = logging.getLogger(__name__)
 #   4 — added sources.iso_639_5 (url)
 #   5 — added sources.glottolog
 #   6 — added sources.glottolog.tree_url and csv_url
-CONFIG_VERSION = 6
+#   7 — added nearest.matrix_chunk_size
+CONFIG_VERSION = 7
 
 # Default configuration — overridden by config.toml and env vars
 DEFAULT_CONFIG = {
@@ -142,6 +143,7 @@ DEFAULT_CONFIG = {
         "max_neighbors": 100,
         "decimals": [4, 6],
         "checkpoint_interval": 1000,
+        "matrix_chunk_size": 128,
     },
     "http": {
         # User-Agent built from version — not hardcoded
@@ -195,6 +197,9 @@ ENV_MAP = {
     "GLFM_NEAREST_DECIMALS": ("nearest", "decimals"),
     "GLFM_NEAREST_CHECKPOINT_INTERVAL": (
         "nearest", "checkpoint_interval"
+    ),
+    "GLFM_NEAREST_MATRIX_CHUNK_SIZE": (
+        "nearest", "matrix_chunk_size"
     ),
     "GLFM_USER_AGENT": ("http", "user_agent"),
     "GLFM_HTTP_TIMEOUT": ("http", "timeout"),

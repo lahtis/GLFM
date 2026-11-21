@@ -43,6 +43,7 @@ DEFAULT_MAX_NEIGHBORS = 100
 DEFAULT_DISTANCE_TYPE = "syntax_knn"
 DEFAULT_DISTANCE_DECIMALS = (4, 6)
 DEFAULT_CHECKPOINT_INTERVAL = 1000
+DEFAULT_MATRIX_CHUNK_SIZE = 128
 
 # --- Distance bases mapping (metadata only) ---
 # Tells which sources each DISTANCE_TYPE uses.
@@ -261,18 +262,17 @@ def collect_written_codes(data: dict) -> Dict[str, str]:
     return langs
 
 
-def compute_distance_matrix(
+def load_feature_matrix(
     codes: List[str],
     distance_type: str,
 ) -> tuple:
-    """Compute a pairwise distance matrix using lang2vec features.
+    """Load and normalize lang2vec feature vectors.
 
-    Returns (matrix, valid_set). matrix is (n, n) with NaN where
-    features are unavailable.
+    Returns (features, valid_indices). Distances are computed
+    later in bounded row chunks so no complete N×N matrix is allocated.
     """
     l2v = _require_lang2vec()
     np = _require_numpy()
-
     n = len(codes)
 
     try:
@@ -315,7 +315,7 @@ def compute_distance_matrix(
     )
 
     if not valid_list:
-        return np.full((n, n), np.nan), valid_set
+        return np.empty((0, 0), dtype=float), []
 
     # Convert feature vectors to numeric; replace '--' with NaN.
     rows = []
@@ -340,25 +340,9 @@ def compute_distance_matrix(
     matrix_valid = np.array(rows, dtype=float)
     num_features = matrix_valid.shape[1]
 
-    log.info("Computing pairwise distances via matrix dot product...")
-
-    sum_ones = matrix_valid.sum(axis=1, keepdims=True)
-    intersection = matrix_valid @ matrix_valid.T
-    diff_count = sum_ones + sum_ones.T - 2 * intersection
-    dist_matrix_valid = (
-        diff_count / num_features
-        if num_features > 0
-        else np.zeros_like(diff_count)
-    )
-
-    full_matrix = np.full((n, n), np.nan)
     code_to_idx = {c: i for i, c in enumerate(codes)}
     valid_indices = [code_to_idx[c] for c in valid_list]
-    full_matrix[np.ix_(valid_indices, valid_indices)] = (
-        dist_matrix_valid
-    )
-
-    return full_matrix, valid_set
+    return matrix_valid, valid_indices
 
 
 class CheckpointManager:
@@ -415,6 +399,7 @@ def build_nearest_map(
     distance_type: str,
     decimals: tuple[int, ...],
     checkpoint_interval: int,
+    matrix_chunk_size: int,
     checkpoint_path: Path,
 ) -> Dict[str, list]:
     np = _require_numpy()
@@ -434,8 +419,6 @@ def build_nearest_map(
         "(max %d per lang)...",
         distance_type, len(lang_ids), max_neighbors,
     )
-
-    matrix, _ = compute_distance_matrix(codes, distance_type)
 
     checkpoint = CheckpointManager(checkpoint_path)
     state = checkpoint.load(distance_type)
@@ -463,55 +446,96 @@ def build_nearest_map(
 
     d4 = decimals[0] if len(decimals) > 0 else 4
     d6 = decimals[1] if len(decimals) > 1 else 6
+    if checkpoint_interval < 1 or matrix_chunk_size < 1:
+        raise ValueError("checkpoint and matrix chunk sizes must be positive")
+    if len(completed_set) >= len(lang_ids) and all(
+        lang_id in results for lang_id in lang_ids
+    ):
+        log.info("Checkpoint already contains all languages; reusing it.")
+        return {lang_id: results[lang_id] for lang_id in lang_ids}
 
-    for i, lang_id in enumerate(lang_ids):
-        if lang_id in completed_set:
-            continue
+    features, feature_lang_indices = load_feature_matrix(
+        codes, distance_type
+    )
+    feature_position = {
+        lang_index: position
+        for position, lang_index in enumerate(feature_lang_indices)
+    }
+    num_features = features.shape[1] if features.ndim == 2 else 0
+    feature_row_sums = features.sum(axis=1) if len(features) else np.array([])
+    log.info(
+        "Computing pairwise distances in chunks of at most %d rows...",
+        matrix_chunk_size,
+    )
 
-        row = matrix[i]
-        valid_mask = ~np.isnan(row)
-        valid_mask[i] = False
+    for start in range(0, len(lang_ids), matrix_chunk_size):
+        stop = min(start + matrix_chunk_size, len(lang_ids))
+        pending = [
+            i for i in range(start, stop)
+            if lang_ids[i] not in completed_set
+            and i in feature_position
+        ]
+        if pending:
+            positions = [feature_position[i] for i in pending]
+            chunk_features = features[positions]
+            intersections = chunk_features @ features.T
+            diff_counts = (
+                feature_row_sums[positions, None]
+                + feature_row_sums[None, :]
+                - 2 * intersections
+            )
+            distance_chunk = (
+                diff_counts / num_features
+                if num_features > 0
+                else np.zeros_like(diff_counts)
+            )
+            row_for_index = {
+                lang_index: distance_chunk[row]
+                for row, lang_index in enumerate(pending)
+            }
+        else:
+            row_for_index = {}
 
-        if not np.any(valid_mask):
-            results[lang_id] = []
+        for i in range(start, stop):
+            lang_id = lang_ids[i]
+            if lang_id in completed_set:
+                continue
+
+            row = row_for_index.get(i)
+            distances = []
+            if row is not None:
+                for feature_col, distance in enumerate(row):
+                    neighbor_index = feature_lang_indices[feature_col]
+                    if neighbor_index == i:
+                        continue
+                    value = float(distance)
+                    distances.append({
+                        "lang": lang_ids[neighbor_index],
+                        "distance": round(value, d4),
+                        "distance_6": round(value, d6),
+                    })
+                # Sort by 6-decimal precision — 4-decimal ties
+                # no longer resolve ordering randomly.
+                distances.sort(key=lambda item: item["distance_6"])
+                distances = distances[:max_neighbors]
+
+            results[lang_id] = distances
             completed_set.add(lang_id)
             completed_list.append(lang_id)
             processed += 1
-            continue
 
-        valid_indices = np.where(valid_mask)[0]
-        valid_distances = row[valid_indices]
-
-        distances = []
-        for j, dist in zip(valid_indices, valid_distances):
-            d = float(dist)
-            distances.append({
-                "lang": lang_ids[j],
-                "distance": round(d, d4),
-                "distance_6": round(d, d6),
-            })
-
-        # Sort by 6-decimal precision — 4-decimal ties
-        # no longer resolve ordering randomly.
-        distances.sort(key=lambda x: x["distance_6"])
-
-        results[lang_id] = distances[:max_neighbors]
-        completed_set.add(lang_id)
-        completed_list.append(lang_id)
-        processed += 1
-
-        if (
-            processed % checkpoint_interval == 0
-            or processed == len(lang_ids)
-        ):
-            log.info(
-                "[%d/%d] %s (%.1f%%)",
-                processed, len(lang_ids),
-                lang_id, (processed / len(lang_ids)) * 100,
-            )
-            checkpoint.save(
-                distance_type, completed_list, results
-            )
+            if (
+                processed % checkpoint_interval == 0
+                or processed == len(lang_ids)
+            ):
+                log.info(
+                    "[%d/%d] %s (%.1f%%)",
+                    processed, len(lang_ids), lang_id,
+                    (processed / len(lang_ids)) * 100,
+                )
+                checkpoint.save(
+                    distance_type, completed_list, results
+                )
 
     checkpoint.save(distance_type, completed_list, results)
     log.info(
@@ -546,6 +570,7 @@ def run(
     distance_type: str,
     decimals: tuple[int, ...],
     checkpoint_interval: int,
+    matrix_chunk_size: int,
 ) -> None:
     data = load_json(input_path)
     nearest_map = build_nearest_map(
@@ -554,6 +579,7 @@ def run(
         distance_type=distance_type,
         decimals=decimals,
         checkpoint_interval=checkpoint_interval,
+        matrix_chunk_size=matrix_chunk_size,
         checkpoint_path=checkpoint_path,
     )
 
@@ -604,6 +630,9 @@ def main() -> int:
     default_checkpoint_interval = nearest_cfg.get(
         "checkpoint_interval", DEFAULT_CHECKPOINT_INTERVAL
     )
+    default_matrix_chunk_size = nearest_cfg.get(
+        "matrix_chunk_size", DEFAULT_MATRIX_CHUNK_SIZE
+    )
 
     data_root = get_data_dir()
     default_file = data_root / "unified_languages.json"
@@ -641,7 +670,29 @@ def main() -> int:
             f"See config.toml [nearest] for options."
         ),
     )
+    parser.add_argument(
+        "--checkpoint-interval", type=int,
+        default=default_checkpoint_interval,
+        help=(
+            "Save a checkpoint after this many processed languages "
+            f"(default: {default_checkpoint_interval}; use a smaller "
+            "value for more frequent saves)."
+        ),
+    )
+    parser.add_argument(
+        "--matrix-chunk-size", type=int,
+        default=default_matrix_chunk_size,
+        help=(
+            "Number of language rows held in the distance matrix chunk "
+            f"at once (default: {default_matrix_chunk_size}; smaller "
+            "values use less memory)."
+        ),
+    )
     args = parser.parse_args()
+    if args.checkpoint_interval < 1:
+        parser.error("--checkpoint-interval must be at least 1")
+    if args.matrix_chunk_size < 1:
+        parser.error("--matrix-chunk-size must be at least 1")
 
     output_path = args.output or args.input
 
@@ -654,7 +705,8 @@ def main() -> int:
             max_neighbors=args.max_neighbors,
             distance_type=args.distance_type,
             decimals=default_decimals,
-            checkpoint_interval=default_checkpoint_interval,
+            checkpoint_interval=args.checkpoint_interval,
+            matrix_chunk_size=args.matrix_chunk_size,
         )
     except OperationalError as exc:
         log.error("Source error: %s", exc)

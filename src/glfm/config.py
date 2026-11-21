@@ -110,7 +110,7 @@ DEFAULT_CONFIG = {
         "consumer": {
             "url": (
                 "https://codeberg.org/lahtis/GLFM/releases/download/"
-                "v.1.0.7/languages_top20.json.gz"
+                "v.1.2.0/languages_top20.json.gz"
             ),
             "sha256": "",
             "size_kt": 558,
@@ -118,14 +118,14 @@ DEFAULT_CONFIG = {
             "mirrors": {
                 "github": (
                     "https://github.com/lahtis/GLFM/releases/download/"
-                    "v.1.0.7/languages_top20.json.gz"
+                    "v.1.2.0/languages_top20.json.gz"
                 ),
             },
         },
         "research": {
             "url": (
                 "https://codeberg.org/lahtis/GLFM/releases/download/"
-                "v.1.0.7/unified_languages.json.gz"
+                "v.1.2.0/unified_languages.json.gz"
             ),
             "sha256": "",
             "size_mb": 1.4,
@@ -133,7 +133,7 @@ DEFAULT_CONFIG = {
             "mirrors": {
                 "github": (
                     "https://github.com/lahtis/GLFM/releases/download/"
-                    "v.1.0.7/unified_languages.json.gz"
+                    "v.1.2.0/unified_languages.json.gz"
                 ),
             },
         },

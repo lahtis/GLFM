@@ -13,7 +13,7 @@ def test_download_rejects_unknown_tier():
         download_data(tier="unknown")
 
 
-def test_download_uses_safe_urlopen(monkeypatch):
+def test_download_uses_safe_urlopen(monkeypatch, tmp_path):
     """Verify that safe_urlopen is used (not urllib directly)."""
     called = {}
 
@@ -25,6 +25,8 @@ def test_download_uses_safe_urlopen(monkeypatch):
     monkeypatch.setattr(
         "glfm.download.safe_urlopen", fake_safe_urlopen
     )
+    # Isolate the test from an already-downloaded user cache.
+    monkeypatch.setattr("glfm.paths.get_cache_dir", lambda: tmp_path)
     with pytest.raises(OperationalError):
         from glfm.download import download_data
         download_data(tier="consumer")

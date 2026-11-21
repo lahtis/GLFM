@@ -30,7 +30,10 @@ log = logging.getLogger(__name__)
 #       (url, filename, timeout); download URLs -> v1.0.7
 #   3 — added sources.iso_639_2 and sources.iso_639_1 (url);
 #       env vars GLFM_ISO_639_2_URL, GLFM_ISO_639_1_URL
-CONFIG_VERSION = 4
+#   4 — added sources.iso_639_5 (url)
+#   5 — added sources.glottolog
+#   6 — added sources.glottolog.tree_url and csv_url
+CONFIG_VERSION = 6
 
 # Default configuration — overridden by config.toml and env vars
 DEFAULT_CONFIG = {
@@ -67,7 +70,7 @@ DEFAULT_CONFIG = {
             ),
         },
         "iso_639_5": {
-            "url": "https://id.loc.gov/vocabulary/iso639-5.skos.rdf",
+            "url": "https://id.loc.gov/vocabulary/iso639-5.tsv",
         },
         "cldr": {
             "version": "48.0.0",
@@ -79,6 +82,16 @@ DEFAULT_CONFIG = {
         },
         "wikidata": {
             "endpoint": "https://query.wikidata.org/sparql",
+        },
+        "glottolog": {
+            "tree_url": (
+                "https://zenodo.org/records/24104033/files/"
+                "tree_glottolog_newick.txt?download=1"
+            ),
+            "csv_url": (
+                "https://zenodo.org/records/24104033/files/"
+                "glottolog_languoid.csv.zip?download=1"
+            ),
         },
         "wiktextract": {
             # Wiktextract dump from kaikki.org (~3 GB compressed).
@@ -162,6 +175,8 @@ ENV_MAP = {
     "GLFM_CLDR_VERSION": ("sources", "cldr", "version"),
     "GLFM_CLDR_URL": ("sources", "cldr", "url"),
     "GLFM_WIKIDATA_ENDPOINT": ("sources", "wikidata", "endpoint"),
+    "GLFM_GLOTTOLOG_TREE_URL": ("sources", "glottolog", "tree_url"),
+    "GLFM_GLOTTOLOG_CSV_URL": ("sources", "glottolog", "csv_url"),
     "GLFM_WIKTEXTTRACT_URL": ("sources", "wiktextract", "url"),
     "GLFM_WIKTEXTTRACT_FILENAME": (
         "sources", "wiktextract", "filename"

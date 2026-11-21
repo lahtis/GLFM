@@ -1,12 +1,15 @@
 # Global Language Family Mapper (GLFM)
 
-A modular, JSON-based language database and validation pipeline for over 7,900 languages (ISO 639-3), including Uralic/Finno-Ugric languages. Designed for RSS feeds, localization, and NLP workflows.
+A JSON language database and validation pipeline covering 6,554 languages
+in the consumer dataset and 7,928 in the research dataset, with extra
+coverage of Uralic languages. The core has no dependencies; an optional
+extra enables nearest-language computation. Built for RSS feeds,
+localization, and NLP workflows.
 
 - **Author:** Tuomas Lähteenmäki  
 - **License:** MIT  
-- **Version:** 1.1.1
 
-> **Beta:** GLFM is in beta. The data format and config structure may change before 1.0.0 stable. See [CHANGELOG.md](CHANGELOG.md) for details.
+> See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ---
 
@@ -14,25 +17,26 @@ A modular, JSON-based language database and validation pipeline for over 7,900 l
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green) 
 ![Status](https://img.shields.io/badge/Status-Active-success)
-![Status](https://img.shields.io/badge/Status-Beta-yellow)
 [![Downloads](https://static.pepy.tech/badge/glfm)](https://pepy.tech/project/glfm)
 
 ---
 
 ## Primary Links
 
-- Canonical Repository (Codeberg): `https://codeberg.org/lahtis/GLFM`  
-- GitHub Mirror: `https://github.com/lahtis/GLFM`
+- [Canonical Repository (Codeberg)](https://codeberg.org/lahtis/GLFM)
+- [GitHub Mirror](https://github.com/lahtis/GLFM)
 
 ---
 
 ## Features
 
-- **7,900+ Languages:** Unified from ISO 639-1/2/3/5, Wikidata (Glottolog), CLDR, and POS statistics.  
-- **Nearest Language Neighbors:** Each written language includes typologically nearest languages based on URIEL/lang2vec features (syntax, phonology, inventory, family).  
+- **6,554–7,928 Languages:** Consumer and research datasets are consolidated from ISO 639-1/2/3, Glottolog, CLDR, and other language metadata.
+- **ISO 639-5 Family and Group Codes:** The full pipeline loads the LOC ISO 639-5 code list and maps languages through their Glottolog classification lineage.
+- **Audit Reports:** Markdown and HTML reports include code-list membership, ISO 639-5 coverage, Glottolog source selection, metadata checks, and lineage coverage.
+- **Nearest Language Neighbors:** Languages covered by URIEL include typologically nearest languages based on lang2vec features (syntax, phonology, inventory, family).
 - **Accurate BCP-47 Tags:** Language, script, and region combined automatically.  
 - **Fallback Chains:** Automatically assigns fallback languages where applicable.  
-- **Uralic/Finno-Ugric Support:** Detailed mapping for Finnish, Karelian, Estonian, and related languages.  
+- **Uralic (including Finno-Ugric) Support:** Detailed mapping for Finnish, Karelian, Estonian, and related languages.
 - **Validation Pipeline:** Full automated checks for ISO consistency, BCP-47 compliance, fallback correctness, POS stats, and Glottolog data.  
 - **Checkpoint/Resume Support:** Long-running nearest-language computations can be resumed automatically from a checkpoint.  
 - **Config Versioning:** `config.toml` carries a `config_version` key, separate from the package version.  
@@ -57,7 +61,7 @@ GLFM/
 │   └── glfm/
 │       ├── __init__.py
 │       ├── _version.py
-│       ├── paths.py               # Paths (cache, data, output)
+│       ├── paths.py               # Cache and data paths
 │       ├── config.py              # Configuration
 │       ├── download.py            # Data downloading
 │       ├── build_unified.py       # Unified database builder
@@ -70,16 +74,15 @@ GLFM/
 │       ├── logic/                 # Logic (script, region, fallback, BCP-47)
 │       ├── models/                # Data models (Language)
 │       └── tools/                 # Validators, reports, helper scripts
-│           ├── build_pos_stats.py         # POS statistics (optional)
-│           ├── download_wiktextract.py    # Wiktextract download (~3 GB)
-└── venv/
+│           ├── build_pos_stats.py        # POS statistics (optional)
+│           └── download_wiktextract.py   # Wiktextract download (~3 GB)
 ```
 
 > Note: Downloadable data (`iso_639_*.py`, `glottolog.json`, `cldr/`) lives in the cache (`~/.cache/glfm/data/`), not in the repo. Bundled data (`override_scripts.json`, `uralic_languages.json`) is shipped with the package (`src/glfm/data/`).
 
-> `download` and `pos_stats` are **not** part of the default pipeline.
+> `download` is **not** part of the default pipeline.
 > - `download`: use `python3 -m glfm.download --tier consumer|research` separately.
-> - `pos_stats`: use `--with-pos` (requires ~3 GB raw data).
+> - POS statistics are optional; use `--with-pos` (requires ~3 GB raw data).
 
 ---
 
@@ -96,7 +99,7 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
   "distance_source": "lang2vec / URIEL",
   "distance_type": "syntax_knn",
   "fallback": "fin",
-  "family": "Finnic",
+  "family": "Uralic",
   "glottocode": "finn1318",
   "glottolog": {  },
   "id": "fin",
@@ -104,7 +107,7 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
   "iso639_2B": "fin",
   "iso639_2T": "fin",
   "iso639_3": "fin",
-  "iso639_5": "",
+  "iso639_5": "urj",
   "language_type": "L",
   "name": "Finnish",
   "nearest_languages": [
@@ -130,8 +133,26 @@ Each language is represented as a JSON object keyed by its ISO 639-3 code:
 - `written_scripts` lists all known writing scripts.
 - `language_type` is SIL Language Type (L = Living, E = Extinct, H = Historical, A = Ancient, C = Constructed).
   Note: `L` follows ISO 639-3 classification; some languages classified as `L` may have no native speakers (e.g. Yokuts).
-- `family` is Glottolog family name (e.g. "Finnic"), not an ISO 639-5 code.
+- `family` is the Glottolog top-level family name (e.g. "Uralic"), not an ISO 639-5 code.
 - `glottocode` is Glottolog language code (e.g. "finn1318").
+- `iso639_5` is an ISO 639-5 family/group code when the Glottolog lineage
+  maps to one (e.g. `urj` for Uralic); it is empty when the data has no
+  unambiguous match.
+
+### ISO 639-5 family and group assignment
+
+The pipeline downloads the 115-code ISO 639-5 list from the Library of
+Congress and Glottolog's compact Newick classification tree plus its
+languoid catalogue. For each language, GLFM checks its Glottocode and then
+walks up the Glottolog lineage, choosing the nearest matching ISO 639-5
+group. The full Glottolog repository archive is not downloaded. If either
+Glottolog data file cannot be fetched, the pipeline falls back to Wikidata
+metadata, which may not include a lineage.
+
+The assignment is necessarily partial: ISO 639-5 contains collection codes,
+not a code for every Glottolog family or language. Unmapped languages keep
+an empty `iso639_5` value. In a full-pipeline run on 2026-11-21, GLFM
+assigned a code to 5,311 of 7,928 languages.
 
 **Distance fields:**
 
@@ -159,7 +180,7 @@ generate ISO → build glottolog → build unified → compute nearest → build
 | Step | Module | Description |
 | :---- | :---- | :---- |
 | generate | `glfm.tools.generate_iso_files` | Download ISO 639 sources |
-| glottolog | `glfm.tools.build_glottolog_json` | Fetch Glottolog metadata (Wikidata) |
+| glottolog | `glfm.tools.build_glottolog_json` | Load Glottolog tree and catalogue (Wikidata fallback) |
 | build | `glfm.build_unified` | Build unified database |
 | compute | `glfm.tools.compute_nearest_languages` | Compute neighbors (lang2vec) |
 | consumer | `glfm.tools.build_consumer_dataset` | Build consumer dataset (top-20) |
@@ -175,32 +196,28 @@ generate ISO → build glottolog → build unified → compute nearest → build
 
 ## CLI
 
-# Full pipeline
+### Full pipeline
 ```bash
 python3 -m glfm.run_full_pipeline
 ```
-# Include POS statistics (requires ~3 GB raw Wiktextract data)
+### Include POS statistics (requires ~3 GB raw Wiktextract data)
 ```bash
 python3 -m glfm.run_full_pipeline --with-pos
 ```
-# List steps (add --with-pos to include pos_stats)
+### List steps (add --with-pos to include pos_stats)
 ```bash
 python3 -m glfm.run_full_pipeline --list
 python3 -m glfm.run_full_pipeline --list --with-pos
 ```
-# Skip heavy neighbor computation
+### Skip nearest-language computation
 ```bash
 python3 -m glfm.run_full_pipeline --skip compute
 ```
-# Run only selected steps
+### Run only selected steps
 ```bash
 python3 -m glfm.run_full_pipeline --only build bcp47
 ```
-# List steps
-```bash
-python3 -m glfm.run_full_pipeline --list
-```
-# Show help
+### Show help
 ```bash
 python3 -m glfm.run_full_pipeline --help
 ```
@@ -209,14 +226,16 @@ python3 -m glfm.run_full_pipeline --help
 
 ## Configuration
 
-`config.toml` (repo root) contains default values. Users can override:
+Defaults are built into the package. Users can add overrides in
+`~/.config/glfm/config.toml` (or the XDG config directory) and through
+environment variables:
 
 - `~/.config/glfm/config.toml`  
-- Environment variables: `GLFM_CACHE_DIR`, `GLFM_OUTPUT_DIR`, `GLFM_ISO_639_3_URL`, etc.
+- Environment variables: `GLFM_CACHE_DIR`, `GLFM_DATA_DIR`, `GLFM_ISO_639_3_URL`, etc.
 
 Example:
 ```toml
-config_version = 3
+config_version = 6
 
 [sources.iso_639_3]
 
@@ -230,6 +249,10 @@ version  = "48.0.0"
 
 endpoint = "https://query.wikidata.org/sparql"
 
+[sources.glottolog]
+tree_url = "https://zenodo.org/records/24104033/files/tree_glottolog_newick.txt?download=1"
+csv_url = "https://zenodo.org/records/24104033/files/glottolog_languoid.csv.zip?download=1"
+
 [sources.wiktextract]
 url = "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz"
 filename = "raw-wiktextract-data.jsonl.gz"
@@ -241,52 +264,55 @@ data_dir = ""        # empty  =  ~/.cache/glfm/data
 
 cache_dir = ""       # empty  =  ~/.cache/glfm
 ```
+
+The download SHA-256 values are empty by default, so downloads are not
+integrity-verified unless you configure hashes. An older user config can
+still contain hashes from a previous release; remove or clear the
+`sha256` entries under `[download.consumer]` and `[download.research]`
+if they cause a mismatch. See the [download note in the changelog](CHANGELOG.md#notes).
 ---
 
 ## Quick Start
 
-### 1 . Install 
+### 1. Install
 ```bash
 pip install glfm
 ```
 
-> **Note:** If `glfm.download` returns 404, your installed `config.toml`
-> may have the wrong tag. Create `~/.config/glfm/config.toml` with:
->
-> ```toml
-> [download.consumer]
-> url = "https://codeberg.org/lahtis/GLFM/releases/download/v.1.0.7/languages_top20.json.gz"
->
-> [download.research]
-> url = "https://codeberg.org/lahtis/GLFM/releases/download/v.1.0.7/unified_languages.json.gz"
-> ```
-
 ### 2. Get data
-Choose one of these:
+
+Choose one of these options. Downloading a prebuilt dataset does not
+require the optional `data` extra.
 
 Option A: Download pre-built data (recommended)
 ```bash
-python3 -m glfm.download                    # consumer (558 kB)
-python3 -m glfm.download --tier research    # research (1.4 MB)
+python3 -m glfm.download                    # consumer (654.4 kB)
+python3 -m glfm.download --tier research    # research (1.9 MB)
 ```
 Option B: Generate data from sources (slow, requires network)
 ```bash
+pip install "glfm[data]"
 python3 -m glfm.run_full_pipeline --only generate glottolog
 ```
 
 
-### 3 . Run the full pipeline
+### 3. (Optional) Generate or rebuild the datasets
+
+Nearest-language computation requires the `data` extra. On memory-limited
+machines, skip that step with `--skip compute`; the resulting dataset will
+not include computed nearest-language lists.
+
 ```bash
 python3 -m glfm.run_full_pipeline
 ```
-### 4 . Access data in Python
+### 4. Access data in Python
 
 ```python
 import gzip, json
 from pathlib import Path
 
 cache = Path.home() / ".cache" / "glfm" / "data"
-with gzip.open(cache / "unified_languages.json.gz", "rt") as f:
+with gzip.open(cache / "languages_top20.json.gz", "rt") as f:
     languages = json.load(f)
 
 fin = languages["fin"]
@@ -296,7 +322,7 @@ print(fin["glottocode"])             # finn1318
 print(fin["nearest_languages"][:5])  # Top 5 nearest languages
 ```
 
-### 5 . Consumer dataset (top-20 neighbors)
+### 5. Consumer dataset (top-20 neighbors)
 ```python
 import gzip
 import json
@@ -342,7 +368,7 @@ for nb in fin["nearest_languages"]:
 ### 7. Optional: POS statistics
 
 
-POS statistics require 5–10 GB of raw Wiktextract data. They are **not**
+POS statistics require ~3 GB of raw Wiktextract data. They are **not**
 part of the default pipeline.
 
 1. Download the Wiktextract dump:
@@ -353,7 +379,7 @@ python3 -m glfm.tools.download_wiktextract
 
 2. Compute POS statistics:
 ```bash
-python3 -m glfm.tools.compute_pos_stats
+python3 -m glfm.tools.build_pos_stats
 ```
     
 3. Run the pipeline with POS data included:
@@ -361,7 +387,7 @@ python3 -m glfm.tools.compute_pos_stats
 python3 -m glfm.run_full_pipeline --with-pos
 ```
 
-Without POS data, pos_stats is an empty {} for each language.
+Without POS data, `pos_stats` is an empty `{}` for each language.
 
 ---
 
@@ -369,9 +395,10 @@ Without POS data, pos_stats is an empty {} for each language.
 
 ## Requirements
 
-- **Python 3.11+**  
+- **Python 3.11+** (tested through Python 3.14.7)
 - **Core dependencies:** none (pure stdlib)  
-- **Dev dependencies:** `numpy`, `requests`, `msgpack`, `lang2vec`, `graphviz`, `pytest`
+- **Data extra:** `numpy`, `requests`, `msgpack`, `graphviz`, `lang2vec`
+- **Development extra:** `pytest`, `pytest-cov`, `ruff`, `mypy`, `build`, `twine`
 
 ## Installation
 
@@ -398,6 +425,9 @@ pip install -e .
 
 # Install development dependencies (optional)
 pip install -e ".[dev]"
+
+# Optional: dependencies for data generation and nearest-language computation
+pip install -e ".[data]"
 ```
 > Note: pip install glfm installs the published PyPI version.
 > pip install -e . installs the local repository in editable mode.
@@ -471,7 +501,8 @@ A 6-decimal version of `distance`. Use it for precise sorting
 
 ## Data Sources & Acknowledgments
 
-- **Glottolog:** Hammarström, Harald & Forkel, Robert & Haspelmath, Martin & Bank, Sebastian. Glottolog. (glottolog.org) – fetched via Wikidata SPARQL.  
+- **Glottolog:** Hammarström, Harald & Forkel, Robert & Haspelmath, Martin & Bank, Sebastian. [Glottolog 5.4](https://glottolog.org/download) – classification tree and languoid catalogue; Wikidata is the fallback source.
+- **ISO 639-5:** [Library of Congress code list](https://id.loc.gov/vocabulary/iso639-5.html) and [official language coding agency](https://www.loc.gov/standards/iso639-5/).
 - **URIEL / lang2vec:** Typological vector representations.  
 - **ISO 639:** Language code standards (ISO 639-1, 639-2, 639-3, 639-5).  
 - **CLDR / Wiktionary:** Locale display names, scripts.
@@ -489,28 +520,3 @@ A 6-decimal version of `distance`. Use it for precise sorting
 
 Copyright © 2026 Tuomas Lähteenmäki  
 MIT License. See LICENSE for details.
-
----
-
-## Key changes
-
-|  # | Section | Change |
-| :---- | :---- | :---- |
-| 1 | Python version | `3.8+` → **`3.11+`** |
-| 2 | Directory Structure | **`src/glfm/` layout** |
-| 3 | Data Structure | **`family: "Finnic"`**, `glottocode: "finn1318"`, `language_type: "L"` |
-| 4 | `nearest_languages` | 5 → **20 (consumer) / 100 (research)** |
-| 5 | Pipeline Overview | **12 steps** (incl. `glottolog`, `consumer`) |
-| 6 | CLI | **`python3 -m glfm.run_full_pipeline`** |
-| 7 | Configuration | **`config.toml`** + env vars |
-| 8 | Requirements | **No core dependencies** (pure stdlib) |
-| 9 | `build_top5.py` | **`build_consumer_dataset.py`** |
-| 10 | "Glottolog future work" | **Glottolog works** (Wikidata) |
-| 11 | `distance_type` default | `fam` → **`syntax_knn`** (as of v1.0.7) |
-| 12 | `distance_6` | **New field** (6-decimal distance, for precise sorting) |
-| 13 | `distance_decimals` | **New field** (`[4, 6]`, lists stored precisions) |
-| 14 | `distance_bases` | **Now depends on `distance_type`** (e.g. `syntax_knn` → `["WALS", "SSWL", "Ethnologue"]`) |
-| 15 | `distance_bases` table | **Added `syntax_average`** (may produce `NaN`; prefer `syntax_knn`) |
-| 16 | `config_version` | **New key** in `config.toml` (tracks config structure, not package version) |
-| 17 | `--with-pos` | **New CLI flag** for optional POS statistics (requires 5–10 GB) |
-| 18 | `download_wiktextract` | **New module** for streaming the Wiktextract dump |

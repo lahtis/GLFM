@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from glfm.errors import DataError, OperationalError
+from glfm.loaders.load_iso_639 import load_iso_639_5
 from glfm.paths import get_bundled_data_dir, get_data_dir
 
 log = logging.getLogger(__name__)
@@ -32,7 +33,39 @@ VALIDATORS = {
     "bcp47": TOOLS / "validate_bcp47.py",
     "fallbacks": TOOLS / "validate_fallbacks.py",
     "iso": TOOLS / "validate_iso_consistency.py",
+    "glottolog": TOOLS / "validate_glottolog.py",
 }
+
+
+def summarize_audit(data: dict, iso639_5_code_count: int) -> dict:
+    """Summarize ISO 639-5 assignment and Glottolog lineage coverage."""
+    total = len(data)
+    assigned = sum(
+        bool(info.get("iso639_5"))
+        for info in data.values()
+        if isinstance(info, dict)
+    )
+    with_glottocode = sum(
+        bool(info.get("glottocode"))
+        for info in data.values()
+        if isinstance(info, dict)
+    )
+    with_lineage = sum(
+        bool((info.get("glottolog") or {}).get("lineage"))
+        for info in data.values()
+        if isinstance(info, dict)
+        and isinstance(info.get("glottolog"), dict)
+    )
+    return {
+        "total_languages": total,
+        "iso639_5_assigned": assigned,
+        "iso639_5_unassigned": total - assigned,
+        "iso639_5_coverage_percent": round(assigned * 100 / total, 1)
+        if total else 0.0,
+        "iso639_5_registry_codes": iso639_5_code_count,
+        "glottocode_records": with_glottocode,
+        "lineage_records": with_lineage,
+    }
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
@@ -95,11 +128,22 @@ def _clean_output(stdout: str, ok_markers: list[str]) -> list[str]:
     return stdout.splitlines()
 
 
+def _validator_errors(result: dict, ok_markers: list[str]) -> list[str]:
+    errors = _clean_output(result["stdout"], ok_markers)
+    if result["returncode"] and not errors:
+        errors = [
+            result["stderr"]
+            or f"Validator exited with status {result['returncode']}"
+        ]
+    return errors
+
+
 def generate_report() -> None:
     output_root = get_data_dir()
     output_root.mkdir(parents=True, exist_ok=True)
 
     unified = output_root / "unified_languages.json"
+    glottolog_source_path = output_root / "glottolog_source.json"
     validation_errors_json = (
         output_root / "validation" / "validation_errors.json"
     )
@@ -128,47 +172,90 @@ def generate_report() -> None:
             "returncode": rc,
         }
 
+    iso_errors = _validator_errors(
+        results["iso"],
+        ["All ISO codes are valid"],
+    )
+    iso639_5_errors = [
+        error
+        for error in iso_errors
+        if "iso639_5" in error or "ISO 639-5" in error
+    ]
     errors_json = {
-        "bcp47": _clean_output(
-            results["bcp47"]["stdout"],
-            ["BCP-47 validation OK", "OK"],
+        "bcp47": _validator_errors(
+            results["bcp47"],
+            ["BCP-47 validation OK"],
         ),
         "bcp47_stderr": (
             results["bcp47"]["stderr"].splitlines()
             if results["bcp47"]["stderr"] else []
         ),
-        "fallbacks": _clean_output(
-            results["fallbacks"]["stdout"],
+        "fallbacks": _validator_errors(
+            results["fallbacks"],
             ["All fallback chains are valid"],
         ),
         "fallbacks_stderr": (
             results["fallbacks"]["stderr"].splitlines()
             if results["fallbacks"]["stderr"] else []
         ),
-        "iso": _clean_output(
-            results["iso"]["stdout"],
-            ["All ISO codes are valid"],
-        ),
+        "iso": [
+            error
+            for error in iso_errors
+            if "iso639_5" not in error and "ISO 639-5" not in error
+        ],
+        "iso639_5_codes": iso639_5_errors,
         "iso_stderr": (
             results["iso"]["stderr"].splitlines()
             if results["iso"]["stderr"] else []
+        ),
+        "glottolog": _validator_errors(
+            results["glottolog"],
+            ["Glottolog validation OK"],
+        ),
+        "glottolog_stderr": (
+            results["glottolog"]["stderr"].splitlines()
+            if results["glottolog"]["stderr"] else []
         ),
         "returncodes": {
             k: v["returncode"] for k, v in results.items()
         },
     }
 
-    _atomic_write_json(validation_errors_json, errors_json)
-
     lang_count = 0
+    unified_data = {}
     if unified.exists():
         try:
             with open(unified, "r", encoding="utf-8") as f:
-                lang_count = len(json.load(f))
+                unified_data = json.load(f)
+                if isinstance(unified_data, dict):
+                    lang_count = len(unified_data)
+                else:
+                    unified_data = {}
         except (json.JSONDecodeError, OSError) as e:
             log.warning("Could not read %s: %s", unified, e)
     else:
         log.warning("unified_languages.json missing: %s", unified)
+
+    glottolog_source = {"source": "not_recorded"}
+    if glottolog_source_path.exists():
+        try:
+            with glottolog_source_path.open("r", encoding="utf-8") as f:
+                loaded_source = json.load(f)
+            if isinstance(loaded_source, dict):
+                glottolog_source = loaded_source
+            else:
+                glottolog_source = {"source": "invalid_metadata"}
+        except (json.JSONDecodeError, OSError) as exc:
+            log.warning("Could not read Glottolog source metadata: %s", exc)
+            glottolog_source = {"source": "invalid_metadata"}
+
+    audit_summary = summarize_audit(
+        unified_data,
+        len(load_iso_639_5()),
+    )
+    audit_summary["glottolog_source"] = glottolog_source
+    errors_json["audit_summary"] = audit_summary
+    _atomic_write_json(validation_errors_json, errors_json)
 
     def status(key: str) -> str:
         return "OK" if not errors_json[key] else "Errors found"
@@ -181,6 +268,13 @@ def generate_report() -> None:
 - BCP‑47 validation: {status("bcp47")}
 - Fallback validation: {status("fallbacks")}
 - ISO validation: {status("iso")}
+- ISO 639-5 registry check: {status("iso639_5_codes")}
+- Glottolog validation: {status("glottolog")}
+- Glottolog source: **{glottolog_source.get("source", "unknown")}**
+- Glottolog source records: **{glottolog_source.get("record_count", "unknown")}**; source lineages: **{glottolog_source.get("lineage_count", "unknown")}**
+- ISO 639-5 assignment: **{audit_summary["iso639_5_assigned"]}/{lang_count}** ({audit_summary["iso639_5_coverage_percent"]}%)
+- ISO 639-5 registry codes: **{audit_summary["iso639_5_registry_codes"]}**
+- Glottocode records: **{audit_summary["glottocode_records"]}/{lang_count}**; lineages: **{audit_summary["lineage_records"]}/{lang_count}**
 """
     if uralic_warning:
         md += f"\n**{uralic_warning}**\n"
@@ -190,6 +284,7 @@ def generate_report() -> None:
         ("bcp47", "BCP‑47"),
         ("fallbacks", "Fallback"),
         ("iso", "ISO"),
+        ("glottolog", "Glottolog"),
     ]:
         out = results[key]["stdout"] or "No output"
         err = results[key]["stderr"]
@@ -222,6 +317,10 @@ def generate_report() -> None:
         "Fallback Errors", errors_json["fallbacks"]
     )
     errors_html += render_errors("ISO Errors", errors_json["iso"])
+    errors_html += render_errors(
+        "ISO 639-5 Registry Errors", errors_json["iso639_5_codes"]
+    )
+    errors_html += render_errors("Glottolog Errors", errors_json["glottolog"])
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -247,6 +346,11 @@ th, td {{ border: 1px solid #ccc; padding: 5px; }}
   <li>BCP‑47 validation: <span class="{'ok' if not errors_json['bcp47'] else 'err'}">{status('bcp47')}</span></li>
   <li>Fallback validation: <span class="{'ok' if not errors_json['fallbacks'] else 'err'}">{status('fallbacks')}</span></li>
   <li>ISO validation: <span class="{'ok' if not errors_json['iso'] else 'err'}">{status('iso')}</span></li>
+  <li>ISO 639-5 registry check: <span class="{'ok' if not errors_json['iso639_5_codes'] else 'err'}">{status('iso639_5_codes')}</span></li>
+  <li>Glottolog validation: <span class="{'ok' if not errors_json['glottolog'] else 'err'}">{status('glottolog')}</span></li>
+  <li>Glottolog source: <strong>{html.escape(str(glottolog_source.get('source', 'unknown')))}</strong>; source records: <strong>{glottolog_source.get('record_count', 'unknown')}</strong></li>
+  <li>ISO 639-5 assignment: <strong>{audit_summary['iso639_5_assigned']}/{lang_count}</strong> ({audit_summary['iso639_5_coverage_percent']}%); registry codes: <strong>{audit_summary['iso639_5_registry_codes']}</strong></li>
+  <li>Glottocode records: <strong>{audit_summary['glottocode_records']}/{lang_count}</strong>; lineages: <strong>{audit_summary['lineage_records']}/{lang_count}</strong></li>
 </ul>
 """
     if uralic_warning:
@@ -259,6 +363,7 @@ th, td {{ border: 1px solid #ccc; padding: 5px; }}
         ("bcp47", "BCP‑47"),
         ("fallbacks", "Fallback"),
         ("iso", "ISO"),
+        ("glottolog", "Glottolog"),
     ]:
         out = results[key]["stdout"] or "No output"
         err = results[key]["stderr"]
@@ -287,6 +392,12 @@ th, td {{ border: 1px solid #ccc; padding: 5px; }}
     print(f"BCP-47: {status('bcp47')}")
     print(f"Fallback: {status('fallbacks')}")
     print(f"ISO: {status('iso')}")
+    print(f"Glottolog: {status('glottolog')}")
+    print(
+        "ISO 639-5: "
+        f"{audit_summary['iso639_5_assigned']}/{lang_count} "
+        f"({audit_summary['iso639_5_coverage_percent']}%)"
+    )
 
 
 def main() -> int:

@@ -13,6 +13,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,7 @@ VALID_MACROAREAS = {
     "Africa", "Eurasia", "Australia", "Papunesia",
     "North America", "South America", "Antarctica",
 }
+GLOTTOCODE_PATTERN = re.compile(r"^[a-z0-9]{4}[0-9]{4}$")
 
 
 def _atomic_write_json(path: Path, data) -> None:
@@ -81,12 +83,39 @@ def validate_glottolog(data: dict) -> list[str]:
         lineage = gl.get("lineage")
         if lineage is not None and not isinstance(lineage, list):
             errors.append(f"{lang_id}: lineage is not a list")
+        elif isinstance(lineage, list):
+            if any(not isinstance(code, str) for code in lineage):
+                errors.append(f"{lang_id}: lineage contains a non-string Glottocode")
+            elif len(lineage) != len(set(lineage)):
+                errors.append(f"{lang_id}: lineage contains duplicate Glottocodes")
         family = gl.get("family")
         if family is not None and not isinstance(family, str):
             errors.append(f"{lang_id}: family is not a string")
+        lineage_names = gl.get("lineage_names")
+        if lineage_names is not None and (
+            not isinstance(lineage_names, list)
+            or any(not isinstance(name, str) for name in lineage_names)
+        ):
+            errors.append(f"{lang_id}: lineage_names must be a list of strings")
+        elif (
+            isinstance(lineage, list)
+            and isinstance(lineage_names, list)
+            and lineage_names
+            and len(lineage) != len(lineage_names)
+        ):
+            errors.append(f"{lang_id}: lineage and lineage_names lengths differ")
         gc = gl.get("glottocode")
         if gc is not None and not isinstance(gc, str):
             errors.append(f"{lang_id}: glottocode is not a string")
+        elif gc and not GLOTTOCODE_PATTERN.fullmatch(gc):
+            errors.append(f"{lang_id}: invalid Glottocode '{gc}'")
+        if isinstance(lineage, list):
+            for code in lineage:
+                if isinstance(code, str) and not GLOTTOCODE_PATTERN.fullmatch(code):
+                    errors.append(
+                        f"{lang_id}: invalid lineage Glottocode '{code}'"
+                    )
+                    break
     return errors
 
 

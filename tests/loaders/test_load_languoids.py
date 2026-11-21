@@ -7,6 +7,8 @@ import pytest
 
 from glfm.errors import DataError, OperationalError
 from glfm.tools.build_glottolog_json import load_from_languoids_json
+from glfm.tools.build_glottolog_json import load_from_tree
+from glfm.tools.build_glottolog_json import load_from_newick
 
 
 class TestLoadFromLanguoidsJson:
@@ -78,3 +80,49 @@ class TestLoadFromLanguoidsJson:
         assert fin["lineage"] == []
         assert fin["macroarea"] is None  # missing from data
         assert fin["status"] == ""  # default
+
+
+def test_newick_builds_nearest_first_lineage() -> None:
+    tree = (
+        "(('Finnish [finn1234][fin]-l-':1)"
+        "'Finnic [finn1318]':1,'Hungarian [hung1287][hun]-l-':1)"
+        "'Uralic [ural1272]':1;\n"
+    )
+    result = load_from_newick(
+        tree,
+        {
+            "finn1234": {
+                "macroarea": "Eurasia",
+                "latitude": "62.0",
+                "longitude": "25.0",
+            }
+        },
+    )
+    assert result["fin"]["glottocode"] == "finn1234"
+    assert result["fin"]["macroarea"] == "Eurasia"
+    assert result["fin"]["lineage"] == ["finn1318", "ural1272"]
+    assert result["fin"]["lineage_names"] == ["Finnic", "Uralic"]
+    assert result["hun"]["lineage"] == ["ural1272"]
+
+
+def test_tree_directory_builds_lineage_names(tmp_path: Path) -> None:
+    tree = tmp_path / "tree"
+    parent = tree / "uralic" / "finnic"
+    parent.mkdir(parents=True)
+    (tree / "uralic" / "md.ini").write_text(
+        "id = ural1272\nname = Uralic\n", encoding="utf-8"
+    )
+    (parent / "md.ini").write_text(
+        "id = finn1318\nname = Finnic\nlineage = ural1272\n",
+        encoding="utf-8",
+    )
+    (parent / "finnish").mkdir()
+    (parent / "finnish" / "md.ini").write_text(
+        "id = finn1234\nname = Finnish\niso639-3 = fin\n"
+        "lineage = ural1272, finn1318\n",
+        encoding="utf-8",
+    )
+
+    result = load_from_tree(tree)
+    assert result["fin"]["lineage"] == ["finn1318", "ural1272"]
+    assert result["fin"]["lineage_names"] == ["Finnic", "Uralic"]

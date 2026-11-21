@@ -22,7 +22,7 @@ from glfm.loaders.load_cldr_likely_subtags import (
     load_cldr_likely_subtags,
 )
 from glfm.loaders.load_glottolog import load_glottolog
-from glfm.loaders.load_iso_639 import load_iso_639
+from glfm.loaders.load_iso_639 import load_iso_639, load_iso_639_5
 from glfm.loaders.load_override_scripts import load_override_scripts
 from glfm.loaders.load_pos_stats import load_pos_stats
 from glfm.loaders.load_uralic_languages import load_uralic_languages
@@ -30,6 +30,7 @@ from glfm.loaders.load_wiktionary_languages import (
     load_wiktionary_languages,
 )
 from glfm.loaders.load_written_languages import load_written_languages
+from glfm.logic.assign_iso639_5 import assign_iso639_5
 from glfm.logic.build_bcp47 import build_bcp47
 from glfm.logic.decide_default_region import decide_default_region
 from glfm.logic.decide_default_script import decide_default_script
@@ -54,6 +55,7 @@ DISTANCE_BASES = ["WALS", "SSWL", "PHOIBLE", "Ethnologue", "Glottolog"]
 def build_unified(config: dict) -> Dict[str, Any]:
     # --- Load data sources ---
     iso = load_iso_639()
+    iso639_5_groups = load_iso_639_5()
     cldr = load_cldr_likely_subtags(config)
     wikt = load_wiktionary_languages()
     written = load_written_languages()
@@ -77,6 +79,12 @@ def build_unified(config: dict) -> Dict[str, Any]:
         w = wikt.get(lang_id, {})
         w_written = written.get(lang_id, {})
         glotto = glottolog.get(lang_id, {})
+        iso5_classification = dict(glotto)
+        if not iso5_classification.get("glottocode"):
+            iso5_classification["glottocode"] = w_written.get("glottocode", "")
+        if not iso5_classification.get("family"):
+            iso5_classification["family"] = w_written.get("family", "")
+        iso5 = assign_iso639_5(iso5_classification, iso639_5_groups)
         pos = pos_stats.get(lang_id, {})
 
         # Names
@@ -88,7 +96,6 @@ def build_unified(config: dict) -> Dict[str, Any]:
         iso2B = iso_info.get("iso639_2B", "")
         iso2T = iso_info.get("iso639_2T", "")
         iso3 = iso_info.get("iso639_3", "")
-        iso5 = iso_info.get("iso639_5", "")
         language_type = iso_info.get("language_type", "")
 
         # --- Script and region dynamically from sources ---
@@ -160,6 +167,13 @@ def build_unified(config: dict) -> Dict[str, Any]:
         lang_dict["nearest_languages"] = []
 
         unified[lang_id] = lang_dict
+
+    mapped_iso5 = sum(bool(entry["iso639_5"]) for entry in unified.values())
+    log.info(
+        "Assigned ISO 639-5 family/group codes to %d/%d languages",
+        mapped_iso5,
+        len(unified),
+    )
 
     return unified
 

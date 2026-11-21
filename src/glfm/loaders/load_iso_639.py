@@ -198,7 +198,7 @@ def load_iso_639() -> Dict[str, Any]:
 
 
 def load_iso_639_5() -> Dict[str, Any]:
-    """ISO 639-5 families separately (not in the language list)."""
+    """Load ISO 639-5 family and group records keyed by code."""
     mod5 = _load_data_module("iso_639_5")
     if mod5 is None:
         return {}
@@ -207,9 +207,14 @@ def load_iso_639_5() -> Dict[str, Any]:
 
     families: Dict[str, Any] = {}
     for family_code, info5 in iso_639_5.items():
+        if isinstance(info5, str):
+            name = info5
+        else:
+            name = _safe(info5, "name", family_code)
         families[family_code] = {
-            "name": _safe(info5, "name", family_code),
+            "name": name,
             "iso639_5": family_code,
+            "hierarchy": _safe(info5, "hierarchy", ""),
         }
-    log.info("Loaded %d ISO 639-5 language families", len(families))
+    log.info("Loaded %d ISO 639-5 family/group codes", len(families))
     return families

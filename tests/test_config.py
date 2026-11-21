@@ -13,6 +13,12 @@ def test_env_override(monkeypatch):
     c = load_config()
     assert c["sources"]["wikidata"]["endpoint"] == "https://example.com/sparql"
 
+def test_glottolog_url_can_be_overridden(monkeypatch):
+    monkeypatch.setenv("GLFM_GLOTTOLOG_TREE_URL", "https://example.com/tree.txt")
+    from glfm.config import load_config
+    c = load_config()
+    assert c["sources"]["glottolog"]["tree_url"] == "https://example.com/tree.txt"
+
 def test_env_decimals_parsed(monkeypatch):
     monkeypatch.setenv("GLFM_NEAREST_DECIMALS", "4,6")
     from glfm.config import load_config

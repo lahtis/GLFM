@@ -44,7 +44,10 @@ def _atomic_write_json(path: Path, data) -> None:
         ) from e
 
 
-def validate_iso(data: dict) -> list[str]:
+def validate_iso(
+    data: dict,
+    valid_iso639_5_codes: set[str] | None = None,
+) -> list[str]:
     errors: list[str] = []
     for lang_id, info in data.items():
         if not isinstance(info, dict):
@@ -63,12 +66,16 @@ def validate_iso(data: dict) -> list[str]:
             errors.append(f"{lang_id}: invalid iso639_2B '{iso2B}'")
         if iso2T and not ISO23_PATTERN.match(iso2T):
             errors.append(f"{lang_id}: invalid iso639_2T '{iso2T}'")
-        if iso5 and iso3:
-            errors.append(
-                f"{lang_id}: has both iso639_3 and iso639_5"
-            )
         if iso5 and not ISO23_PATTERN.match(iso5):
             errors.append(f"{lang_id}: invalid iso639_5 '{iso5}'")
+        elif (
+            iso5
+            and valid_iso639_5_codes is not None
+            and iso5 not in valid_iso639_5_codes
+        ):
+            errors.append(
+                f"{lang_id}: iso639_5 '{iso5}' is not in the ISO 639-5 registry"
+            )
         if iso1 and not iso3:
             errors.append(f"{lang_id}: has iso639_1 but no iso639_3")
     return errors
@@ -114,7 +121,17 @@ def main() -> int:
         )
         return 1
 
-    errors = validate_iso(data)
+    from glfm.loaders.load_iso_639 import load_iso_639_5
+
+    iso639_5 = load_iso_639_5()
+    if not iso639_5:
+        log.error(
+            "ISO 639-5 registry is missing or empty; run "
+            "python3 -m glfm.tools.generate_iso_files first"
+        )
+        return 1
+
+    errors = validate_iso(data, set(iso639_5))
 
     if errors:
         try:

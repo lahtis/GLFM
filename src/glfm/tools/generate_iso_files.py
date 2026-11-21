@@ -108,6 +108,17 @@ def safe_download(
     """
     source = _get_source_config(config, url_key)
     url = source.get("url")
+    if (
+        url_key == "iso_639_5"
+        and url in {
+            "http://id.loc.gov/vocabulary/iso639-5.skos.rdf",
+            "https://id.loc.gov/vocabulary/iso639-5.skos.rdf",
+        }
+    ):
+        # Older config files point at the concept scheme, which contains
+        # links to top concepts but not the complete code records.
+        url = "https://id.loc.gov/vocabulary/iso639-5.tsv"
+        log.info("Using the complete ISO 639-5 code-list TSV endpoint")
     if not url:
         raise OperationalError(
             f"Config: sources.{url_key}.url is missing",
@@ -120,7 +131,7 @@ def safe_download(
     timeout = timeout or http.get("timeout", 60)
 
     data_dir = get_data_dir()
-    suffix = ".rdf" if url_key == "iso_639_5" else ".tab"
+    suffix = ".tsv" if url_key == "iso_639_5" else ".tab"
     out = data_dir / f"{url_key}{suffix}"
 
     log.info("Downloading %s: %s", url_key, url)
@@ -168,13 +179,13 @@ def generate_iso_modules() -> None:
     tab3 = safe_download("iso_639_3", config)
     tab_names = safe_download("iso_639_3_names", config)
     tab_macro = safe_download("iso_639_3_macrolanguages", config)
-    rdf5 = safe_download("iso_639_5", config)
+    tsv5 = safe_download("iso_639_5", config)
 
     log.info("=== Parsing ISO files ===")
 
     from glfm.tools.parse_iso_files import parse_all_iso_files
 
-    data = parse_all_iso_files(tab3, tab_names, tab_macro, rdf5)
+    data = parse_all_iso_files(tab3, tab_names, tab_macro, tsv5)
 
     log.info("=== Writing Python modules to data/ ===")
 

@@ -22,7 +22,7 @@ url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3_Name_In
 url = "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3-macrolanguages.tab"
 
 [sources.iso_639_5]
-url = "https://id.loc.gov/vocabulary/iso639-5.skos.rdf"
+url = "https://id.loc.gov/vocabulary/iso639-5.tsv"
 
 [sources.cldr]
 version = "48.0.0"
@@ -30,6 +30,11 @@ url = "https://raw.githubusercontent.com/unicode-org/cldr-json/48.0.0/cldr-json/
 
 [sources.wikidata]
 endpoint = "https://query.wikidata.org/sparql"
+
+[sources.glottolog]
+# Official Glottolog 5.4 compact tree and languoid catalogue.
+tree_url = "https://zenodo.org/records/24104033/files/tree_glottolog_newick.txt?download=1"
+csv_url = "https://zenodo.org/records/24104033/files/glottolog_languoid.csv.zip?download=1"
 
 [sources.wiktextract]
 # Raw Wiktextract dump for POS statistics (~3 GB compressed)

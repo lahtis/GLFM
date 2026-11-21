@@ -13,23 +13,16 @@
 #
 
 import argparse
+import csv
 import json
 import logging
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Dict
 
 from glfm.errors import DataError, OperationalError
 
 log = logging.getLogger(__name__)
-
-# ISO 639-5 SKOS namespaces
-SKOS_NS = {
-    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-    "skos": "http://www.w3.org/2004/02/skos/core#",
-}
-RDF_ABOUT = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
 
 
 def _read_lines(path: Path):
@@ -166,46 +159,73 @@ def parse_iso639_3_macrolanguages(path: Path) -> Dict[str, list]:
     return macros
 
 
-def parse_iso639_5_rdf(path: Path) -> Dict[str, str]:
-    """Parse ISO 639-5 SKOS RDF file.
+def _normalized_header(value: str) -> str:
+    return "".join(ch.lower() for ch in value.lstrip("\ufeff") if ch.isalnum())
 
-    Returns {code: name}.
-    """
-    iso5: Dict[str, str] = {}
 
+def parse_iso639_5_tsv(path: Path) -> Dict[str, Dict[str, str]]:
+    """Parse the Library of Congress ISO 639-5 tab-delimited code list."""
     try:
-        tree = ET.parse(path)
-    except ET.ParseError as e:
-        raise DataError(
-            f"ISO 639-5 RDF is not valid XML: {e}",
-            source="iso_639_5",
-        ) from e
-    except OSError as e:
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            headers = {
+                _normalized_header(name): name
+                for name in (reader.fieldnames or [])
+                if name
+            }
+            code_key = next(
+                (headers[key] for key in ("code", "iso6395", "id") if key in headers),
+                None,
+            )
+            name_key = next(
+                (
+                    headers[key]
+                    for key in ("labelenglish", "englishname", "name", "label")
+                    if key in headers
+                ),
+                None,
+            )
+            uri_key = headers.get("uri")
+            hierarchy_key = next(
+                (value for key, value in headers.items() if "hierarchy" in key),
+                None,
+            )
+            if not name_key or (not code_key and not uri_key):
+                raise DataError(
+                    "ISO 639-5 TSV is missing code or English-label columns.",
+                    source="iso_639_5",
+                )
+
+            iso5: Dict[str, Dict[str, str]] = {}
+            for row in reader:
+                code = (row.get(code_key) or "").strip().lower() if code_key else ""
+                if not code and uri_key:
+                    uri = (row.get(uri_key) or "").strip().rstrip("/")
+                    code = uri.rsplit("/", 1)[-1].lower()
+                name = (row.get(name_key) or "").strip()
+                if len(code) != 3 or not code.isalpha() or not name:
+                    continue
+                record = {"name": name}
+                if hierarchy_key:
+                    hierarchy = (row.get(hierarchy_key) or "").strip()
+                    if hierarchy:
+                        record["hierarchy"] = hierarchy
+                iso5[code] = record
+    except DataError:
+        raise
+    except (OSError, UnicodeError, csv.Error) as e:
         raise OperationalError(
-            f"Could not read {path}: {e}",
-            source="filesystem",
-            kind="transport",
+            f"Could not parse ISO 639-5 TSV {path}: {e}",
+            source="iso_639_5",
+            kind="invalid_response",
         ) from e
 
-    root = tree.getroot()
-
-    for concept in root.findall("rdf:Description", SKOS_NS):
-        about = concept.get(RDF_ABOUT)
-        if not about:
-            continue
-
-        # Accept only ISO 639-5 codes.
-        if not about.startswith(
-            "http://id.loc.gov/vocabulary/iso639-5/"
-        ):
-            continue
-
-        code = about.rsplit("/", 1)[-1]
-        label = concept.find("skos:prefLabel", SKOS_NS)
-        if label is not None and label.text:
-            iso5[code] = label.text
-
-    log.info("ISO 639-5: %d language families", len(iso5))
+    if not iso5:
+        raise DataError(
+            "ISO 639-5 TSV contained no valid code rows.",
+            source="iso_639_5",
+        )
+    log.info("ISO 639-5: %d language families and groups", len(iso5))
     return iso5
 
 
@@ -228,11 +248,11 @@ def parse_all_iso_files(
     names = parse_iso639_3_names(Path(name_index_path))
     macros = parse_iso639_3_macrolanguages(Path(macrolanguages_path))
 
-    iso5: Dict[str, str] = {}
+    iso5: Dict[str, Dict[str, str]] = {}
     if Path(iso639_5_path).exists():
-        iso5 = parse_iso639_5_rdf(Path(iso639_5_path))
+        iso5 = parse_iso639_5_tsv(Path(iso639_5_path))
     else:
-        log.warning("ISO 639-5 RDF missing: %s", iso639_5_path)
+        log.warning("ISO 639-5 TSV missing: %s", iso639_5_path)
 
     return {
         "iso639_1": iso1,
@@ -256,7 +276,7 @@ def main() -> int:
         "macros", type=Path, help="iso-639-3_macrolanguages.tab"
     )
     parser.add_argument(
-        "iso639_5", type=Path, help="iso-639-5.skos.rdf"
+        "iso639_5", type=Path, help="iso639-5.tsv"
     )
     args = parser.parse_args()
 

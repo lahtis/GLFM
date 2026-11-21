@@ -86,6 +86,10 @@ def load_glottolog() -> Dict[str, Dict[str, Any]]:
             "latitude": _coord(info.get("latitude")),
             "longitude": _coord(info.get("longitude")),
             "lineage": lineage if isinstance(lineage, list) else [],
+            "lineage_names": (
+                info.get("lineage_names")
+                if isinstance(info.get("lineage_names"), list) else []
+            ),
             "status": info.get("status") or "",
         }
 

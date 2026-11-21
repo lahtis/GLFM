@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Notes
+
+- **Download SHA-256 settings:** The default SHA-256 values for consumer
+  and research downloads are empty. Downloads therefore log a warning
+  and are not integrity-verified unless a hash is configured. If your
+  `~/.config/glfm/config.toml` still contains a SHA-256 value from an
+  earlier release, it overrides the new default and can cause a SHA-256
+  mismatch. Remove or clear the old `sha256` value under
+  `[download.consumer]` or `[download.research]` to use the current
+  default. The config-version warning does not automatically rewrite
+  this user file.
+
+### Added
+
+- **ISO 639-5 assignment:** the pipeline downloads Glottolog's compact
+  Newick tree and languoid catalogue and follows each language's lineage
+  to assign the nearest matching ISO 639-5 family/group code. If the
+  Glottolog downloads are unavailable, the pipeline falls back to Wikidata.
+- **Validation reports:** Markdown, HTML, and JSON now include Glottolog
+  metadata checks, ISO 639-5 registry membership, and coverage counts for
+  assignments, Glottocodes, and lineages. They also show whether Glottolog
+  metadata came from the official source, a local file, or Wikidata fallback.
+
+### Changed
+
+- **`lang2vec` compatibility:** the `data` extra now pins
+  `setuptools<80.9` because `lang2vec` imports `pkg_resources`, which
+  emits a deprecation warning in setuptools 80.9 and newer.
+
 ## [1.1.0] — 2026-10-31
 
 This release introduces a vendored `safe_http` layer, a proper error

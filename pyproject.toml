@@ -45,10 +45,10 @@ data = [
     "msgpack>=1.0.5",
     "graphviz>=0.20",
     "lang2vec>=1.1.0",
-    # lang2vec imports pkg_resources, which was removed in
-    # setuptools 82.0.0. Pin to <82 until lang2vec migrates to
+    # lang2vec imports pkg_resources, which warns in setuptools 80.9+.
+    # Pin below 80.9 until lang2vec migrates to
     # importlib.metadata / importlib.resources.
-    "setuptools<82",
+    "setuptools<80.9",
 ]
 
 [project.scripts]
@@ -76,6 +76,7 @@ glfm = ["data/*.json"]
 # --- Pytest ---
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-ra --strict-markers"
 
 # --- Ruff ---

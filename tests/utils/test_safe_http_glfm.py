@@ -46,6 +46,10 @@ class TestSafeHttpGlfm:
         monkeypatch.setattr(
             "glfm.utils.safe_http._opener.open", fake_open
         )
+        # This test checks request headers, not DNS or public-IP filtering.
+        monkeypatch.setattr(
+            "glfm.utils.safe_http._ip_is_global", lambda _hostname: True
+        )
 
         req = urllib.request.Request(
             "https://query.wikidata.org/sparql",

@@ -2,7 +2,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.2.0
+# Version 1.2.1
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.
@@ -20,7 +20,7 @@ The version follows PEP 440:
 
 import re
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 __version_tuple__ = tuple(
     int(x) for x in re.findall(r"\d+", __version__)[:3]
 )

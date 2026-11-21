@@ -3,7 +3,7 @@
 #
 # GLFM Project
 # Copyright (c) 2026 Tuomas Lähteenmäki
-# Version 1.2.0
+# Version 1.2.1
 #
 # https://codeberg.org/lahtis/GLFM
 # Licensed under the MIT License.

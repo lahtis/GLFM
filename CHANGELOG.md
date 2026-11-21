@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.1] — 2026-11-21
+
+### Fixed
+
+- Include `CHANGELOG.md` in the source distribution so README changelog links
+  work on PyPI and the release history is available to source-package users.
+- Include the complete `tests/` Python test suite in the source distribution.
+
 ## [1.2.0] — 2026-11-21
 
 ### Notes

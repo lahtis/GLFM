@@ -282,6 +282,13 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--max-neighbors", type=int, default=None,
+        help=(
+            "For compute: maximum neighbors stored per language "
+            "(defaults to [nearest].max_neighbors in config)."
+        ),
+    )
+    parser.add_argument(
         "--list", action="store_true",
         help=(
             "List all available steps and exit (use --with-pos to "
@@ -293,6 +300,8 @@ def main() -> int:
         parser.error("--checkpoint-interval must be at least 1")
     if args.matrix_chunk_size is not None and args.matrix_chunk_size < 1:
         parser.error("--matrix-chunk-size must be at least 1")
+    if args.max_neighbors is not None and args.max_neighbors < 1:
+        parser.error("--max-neighbors must be at least 1")
 
     # Build the list of steps to run
     all_steps = list(STEPS)
@@ -370,6 +379,8 @@ def main() -> int:
             extra_args.extend([
                 "--matrix-chunk-size", str(args.matrix_chunk_size)
             ])
+        if key == "compute" and args.max_neighbors is not None:
+            extra_args.extend(["--max-neighbors", str(args.max_neighbors)])
 
         ok = run_step(title, module, timeout, extra_args)
 

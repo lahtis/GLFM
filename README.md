@@ -166,6 +166,13 @@ assigned a code to 5,311 of 7,928 languages.
 - `nearest_languages` ranks typologically nearest written languages by distance
   (up to `max_neighbors`, default 100 for research, 20 for consumer).
   Each entry contains `lang`, `distance` (4 decimals), and `distance_6` (6 decimals).
+- Choose the research neighbor count with `--max-neighbors N` when running
+  the full pipeline or the compute command. The default is 100; the consumer
+  dataset keeps at most its configured top-20 entries. You can also set
+  `max_neighbors` under `[nearest]` in `config.toml`.
+- The computation still compares every eligible language pair to find the
+  nearest neighbors. `max_neighbors` controls how many results are stored;
+  `--matrix-chunk-size` controls how much of the distance matrix is in memory.
 - `distance_6` is a 6-decimal version of `distance`. Use it for precise sorting,
   since 4-decimal values may tie.
 
@@ -199,6 +206,16 @@ generate ISO → build glottolog → build unified → compute nearest → build
 ### Full pipeline
 ```bash
 python3 -m glfm.run_full_pipeline
+```
+### Choose how many nearest languages to store
+```bash
+python3 -m glfm.run_full_pipeline --max-neighbors 50
+```
+The default is 100 for the research dataset. Set `max_neighbors = 50` under
+`[nearest]` in `config.toml` to make this the default for future runs. For a
+direct compute run, use:
+```bash
+python3 -m glfm.tools.compute_nearest_languages --max-neighbors 50
 ```
 ### Include POS statistics (requires ~3 GB raw Wiktextract data)
 ```bash
@@ -235,7 +252,7 @@ environment variables:
 
 Example:
 ```toml
-config_version = 6
+config_version = 7
 
 [sources.iso_639_3]
 
@@ -265,11 +282,9 @@ data_dir = ""        # empty  =  ~/.cache/glfm/data
 cache_dir = ""       # empty  =  ~/.cache/glfm
 ```
 
-The download SHA-256 values are empty by default, so downloads are not
-integrity-verified unless you configure hashes. An older user config can
-still contain hashes from a previous release; remove or clear the
-`sha256` entries under `[download.consumer]` and `[download.research]`
-if they cause a mismatch. See the [download note in the changelog](CHANGELOG.md#notes).
+- **Download hashes:** SHA-256 verification is off by default. If an old
+  config causes a hash mismatch, clear `sha256` under `[download.consumer]`
+  or `[download.research]`. See the [changelog](CHANGELOG.md#notes).
 ---
 
 ## Quick Start
